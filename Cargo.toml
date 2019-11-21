@@ -1,0 +1,30 @@
+[package]
+name = "phosphor"
+version = "0.0.1"
+authors = ["trashbyte"]
+edition = "2018"
+
+[dependencies]
+cgmath = { version = "0.17.0", features = [ "swizzle" ] }
+rusttype = { version = "0.8.1", features = ["gpu_cache"] }
+
+time = "0.1.42"
+rand = "0.7.2"
+noise = "0.6.0"
+fnv = "1.0.6"
+smallvec = "1.0.0"
+hashbrown = "0.6.2"
+parking_lot = "0.9.0"
+lazy_static = "1.4.0"
+image = "0.22.3"
+winit = "0.19.4"
+vulkano = "0.16.0"
+xalloc = "0.2.6"
+half = "1.4.0"
+
+vulkano-shaders = { version = "0.16.0", path = "../vulkano-shaders" }
+lumberjack = { path = "../lumberjack" }
+toolbox = { path = "../toolbox" }
+
+[build-dependencies]
+rerun_except = "0.1.0"
