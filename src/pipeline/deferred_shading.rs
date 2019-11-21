@@ -17,7 +17,6 @@ use winit::Window;
 
 use crate::cpu_pool::XallocCpuBufferPool;
 use crate::geometry::{DeferredShadingVertex, VertexPositionUV};
-use crate::pipeline::text::TextData;
 use crate::pipeline::RenderPipelineAbstract;
 use crate::renderer::RenderInfo;
 use crate::renderpass::DeferredShadingRenderPass;
@@ -190,16 +189,6 @@ impl RenderPipelineAbstract for DeferredShadingRenderPipeline {
             .add_sampled_image(self.skybox_texture.clone(), self.linear_sampler.clone()).unwrap()
             .build().unwrap()
         );
-
-        {
-            let mut lock = info.render_queues.write().unwrap();
-            let num = lock.meshes.len();
-            lock.text.push(TextData {
-                text: format!("Chunks drawing: {}", num),
-                position: (5, 110),
-                ..TextData::default()
-            });
-        }
 
         let mut voxel_descriptor_sets = Vec::new();
         let lock = info.render_queues.read().unwrap();

@@ -3,6 +3,7 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate vulkano;
 #[macro_use] extern crate lumberjack;
+#[macro_use] extern crate imgui;
 
 extern crate cgmath;
 extern crate fnv;

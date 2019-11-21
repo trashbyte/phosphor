@@ -21,6 +21,7 @@ winit = "0.19.4"
 vulkano = "0.16.0"
 xalloc = "0.2.6"
 half = "1.4.0"
+imgui = "0.2.1"
 
 vulkano-shaders = { version = "0.16.0", path = "../vulkano-shaders" }
 lumberjack = { path = "../lumberjack" }

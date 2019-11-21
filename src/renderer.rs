@@ -1,11 +1,11 @@
 //! Main renderer.
 
 use std::sync::{Arc, RwLock};
-use std::sync::atomic::Ordering;
 
 use cgmath::{EuclideanSpace, Matrix4, Vector4, SquareMatrix, Deg};
 use parking_lot::Mutex;
-use winit::{Window, WindowBuilder, EventsLoop};
+use winit::{Window, WindowBuilder, EventsLoop, MouseCursor};
+use winit::dpi::LogicalSize;
 
 use vulkano::buffer::BufferUsage;
 use vulkano::device::{Device, DeviceExtensions, Queue};
@@ -29,6 +29,7 @@ use crate::pipeline::text::TextData;
 use crate::pipeline::occlusion::OCCLUSION_FRAME_SIZE;
 use crate::compute::ParallelReductionSolver;
 use crate::vulkano_win::VkSurfaceBuild;
+use crate::pipeline::imgui::ImguiRenderPipeline;
 
 
 /// Matrix to correct vulkan clipping planes and flip y axis.
@@ -106,6 +107,7 @@ pub enum GestaltRenderPass {
     PostProcess      = 3,
     Lines            = 4,
     Text             = 5,
+    Imgui            = 6,
 }
 
 
@@ -152,7 +154,8 @@ pub struct Renderer {
     /// List of render pipelines.
     pipelines: Vec<Box<dyn RenderPipelineAbstract>>,
     /// Information required by render pipelines
-    pub info: RenderInfo
+    pub info: RenderInfo,
+    imgui_pipeline: Option<ImguiRenderPipeline>
 }
 
 
@@ -160,7 +163,7 @@ impl Renderer {
     /// Creates a new `Renderer`.
     pub fn new(event_loop: &EventsLoop) -> Renderer {
         let instance = Instance::new(None, &crate::vulkano_win::required_extensions(), None).expect("failed to create instance");
-        let surface = WindowBuilder::new().build_vk_surface(event_loop, instance.clone()).unwrap();
+        let surface = WindowBuilder::new().with_dimensions(LogicalSize { width: 1366.0, height: 768.0 }).build_vk_surface(event_loop, instance.clone()).unwrap();
         let physical = PhysicalDevice::enumerate(&instance).next().expect("no device available");
 
         let device_ext = DeviceExtensions {
@@ -186,20 +189,19 @@ impl Renderer {
         let queue_main = queues.next().unwrap();
         let queue_offscreen = queues.next().unwrap();
         let queue_compute = queues.next().unwrap();
-
         let dimensions;
         let capabilities;
         let (swapchain, images) = {
             capabilities = surface.capabilities(physical.clone()).expect("failed to get surface capabilities");
 
-            dimensions = [1024, 768];
+            dimensions = [1366, 768];
             let usage = capabilities.supported_usage_flags;
             let alpha = capabilities.supported_composite_alpha.iter().next().unwrap();
 
             Swapchain::new(device.clone(), surface.clone(), capabilities.min_image_count,
                            vulkano::format::Format::B8G8R8A8Srgb, dimensions, 1, usage, &queue_main,
                            vulkano::swapchain::SurfaceTransform::Identity, alpha,
-                           vulkano::swapchain::PresentMode::Fifo, true, None)
+                           vulkano::swapchain::PresentMode::Immediate, true, None)
                 .expect("failed to create swapchain")
         };
 
@@ -276,7 +278,7 @@ impl Renderer {
         let mut pipelines = Vec::<Box<dyn RenderPipelineAbstract>>::with_capacity(3);
         pipelines.insert(GestaltRenderPass::Occlusion as usize,        Box::new(OcclusionRenderPipeline::new(&mut info, OCCLUSION_FRAME_SIZE)));
         pipelines.insert(GestaltRenderPass::DeferredShading as usize,  Box::new(DeferredShadingRenderPipeline::new(&info)));
-        pipelines.insert(GestaltRenderPass::DeferredLighting as usize,  Box::new(DeferredLightingRenderPipeline::new(&info)));
+        pipelines.insert(GestaltRenderPass::DeferredLighting as usize, Box::new(DeferredLightingRenderPipeline::new(&info)));
         pipelines.insert(GestaltRenderPass::PostProcess as usize,      Box::new(PostProcessRenderPipeline::new(&info)));
         pipelines.insert(GestaltRenderPass::Lines as usize,            Box::new(LinesRenderPipeline::new(&info)));
         pipelines.insert(GestaltRenderPass::Text as usize,             Box::new(TextRenderPipeline::new(&info)));
@@ -287,10 +289,21 @@ impl Renderer {
             images,
             recreate_swapchain: false,
             pipelines,
-            info
+            info,
+            imgui_pipeline: None,
         }
     }
 
+    pub fn with_imgui(mut self, imgui: &mut imgui::Context) -> Self {
+        // TODO: dpi stuff
+        imgui.io_mut().font_global_scale = 1.0;
+        imgui.io_mut().display_framebuffer_scale = [1.0, 1.0];
+        if let Some(logical_size) = self.surface.window().get_inner_size() {
+            imgui.io_mut().display_size = [logical_size.width as f32, logical_size.height as f32];
+        }
+        self.imgui_pipeline = Some(ImguiRenderPipeline::new(&self.info, imgui));
+        self
+    }
 
     /// Draw all objects in the render queue. Called every frame in the game loop.
     pub fn draw(&mut self, camera: &Camera, transform: Transform) -> Result<SwapchainAcquireFuture<Window>, RendererDrawError> {
@@ -327,6 +340,7 @@ impl Renderer {
             std::mem::replace(&mut self.swapchain, new_swapchain);
             std::mem::replace(&mut self.images, new_images);
 
+            // TODO: clean this up (make buffers more generic, store format)
             let new_depth_buffer = AttachmentImage::transient(self.info.device.clone(), self.info.dimensions, D32Sfloat).unwrap();
             std::mem::replace(&mut self.info.depth_buffer_image, new_depth_buffer);
             let new_position_buffer  = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
@@ -341,8 +355,18 @@ impl Renderer {
             std::mem::replace(&mut self.info.metallic_buffer_image, new_metallic_buffer);
             let new_hdr_buffer       = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
             std::mem::replace(&mut self.info.hdr_color_buffer_image, new_hdr_buffer);
+            let new_luma_buffer_image = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, ImageUsage {
+                color_attachment: true,
+                input_attachment: true,
+                transfer_source: true,
+                ..ImageUsage::none()
+            }).unwrap();
+            std::mem::replace(&mut self.info.luma_buffer_image, new_luma_buffer_image);
 
             for p in self.pipelines.iter_mut() {
+                p.remove_framebuffers();
+            }
+            if let Some(p) = &mut self.imgui_pipeline {
                 p.remove_framebuffers();
             }
 
@@ -350,6 +374,9 @@ impl Renderer {
         }
 
         for p in self.pipelines.iter_mut() {
+            p.recreate_framebuffers_if_none(&self.images, &self.info);
+        }
+        if let Some(p) = &mut self.imgui_pipeline {
             p.recreate_framebuffers_if_none(&self.images, &self.info);
         }
 
@@ -371,12 +398,12 @@ impl Renderer {
         {
             avg = *self.info.reduction_solver.lock().avg.lock();
         }
-        self.info.render_queues.write().unwrap().text.push(TextData {
-            text: format!("{:>+2.6}", avg),
-            position: (5, 200),
-            family: "Fira Mono".to_string(),
-            ..TextData::default()
-        });
+//        self.info.render_queues.write().unwrap().text.push(TextData {
+//            text: format!("{:>+2.6}", avg),
+//            position: (5, 200),
+//            family: "Fira Mono".to_string(),
+//            ..TextData::default()
+//        });
         self.info.exposure -= avg;
 
 //        match crate::compute::REDUCTION_SOLVER_WORKING.load(Ordering::Relaxed) {
@@ -395,6 +422,27 @@ impl Renderer {
 //        }
 
         Ok(future)
+    }
+
+    pub fn draw_imgui(&mut self, ui: imgui::Ui) {
+        match ui.mouse_cursor() {
+            Some(mouse_cursor) => {
+                self.surface.window().set_cursor(match mouse_cursor {
+                    imgui::MouseCursor::Arrow => MouseCursor::Arrow,
+                    imgui::MouseCursor::TextInput => MouseCursor::Text,
+                    imgui::MouseCursor::ResizeAll => MouseCursor::Move,
+                    imgui::MouseCursor::ResizeNS => MouseCursor::NsResize,
+                    imgui::MouseCursor::ResizeEW => MouseCursor::EwResize,
+                    imgui::MouseCursor::ResizeNESW => MouseCursor::NeswResize,
+                    imgui::MouseCursor::ResizeNWSE => MouseCursor::NwseResize,
+                    imgui::MouseCursor::Hand => MouseCursor::Hand,
+                });
+            }
+            _ => self.surface.window().hide_cursor(true),
+        }
+
+        let draw_data = ui.render();
+        self.imgui_pipeline.as_mut().unwrap().build_command_buffers(&self.info, draw_data);
     }
 
     pub fn submit(&mut self, image_acq_fut: SwapchainAcquireFuture<Window>) {
@@ -422,6 +470,14 @@ impl Renderer {
         let (cb, q) = self.pipelines[GestaltRenderPass::Text as usize].build_command_buffer(&self.info);
         main_future = Box::new(main_future.then_execute(q.clone(), cb).unwrap());
 
+        if self.imgui_pipeline.is_some() {
+            if let Some(cbs) = self.imgui_pipeline.as_mut().unwrap().cached_command_buffers.take() {
+                for cb in cbs {
+                    main_future = Box::new(main_future.then_signal_semaphore().then_execute(self.info.queue_main.clone(), cb).unwrap());
+                }
+            }
+        }
+
         let final_main_future = main_future.then_swapchain_present(self.info.queue_main.clone(),
                                                                   self.swapchain.clone(),
                                                                   self.info.image_num)
@@ -432,7 +488,7 @@ impl Renderer {
                 f.wait(None).unwrap();
                 f.cleanup_finished();
             }
-            Err(::vulkano::sync::FlushError::OutOfDate) => {
+            Err(vulkano::sync::FlushError::OutOfDate) => {
                 self.recreate_swapchain = true;
                 return;
             }

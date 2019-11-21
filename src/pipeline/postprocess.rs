@@ -113,12 +113,13 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
         },
                              vec![self.fullscreen_vertex_buffer.clone()],
                              descriptor_set, TonemapperShaders::fragment::ty::Constants {
-                                exposure: info.exposure,
+                                exposure: 1.0,
                                 debug_vis_mode: info.debug_visualize_setting,
                                 screen_dimensions: [info.dimensions[0] as f32, info.dimensions[1] as f32]
                             }).unwrap()
-            .end_render_pass().unwrap()
-            .copy_image_to_buffer(info.luma_buffer_image.clone(), info.reduction_solver.lock().source_buffer.clone()).unwrap();
+            .end_render_pass().unwrap();
+            // TODO: luma buffer needs to handle dynamic size
+            //.copy_image_to_buffer(info.luma_buffer_image.clone(), info.reduction_solver.lock().source_buffer.clone()).unwrap();
         (cb.build().unwrap(), info.queue_main.clone())
     }
 
