@@ -123,10 +123,10 @@ impl DeferredShadingRenderPipeline {
             20, 21, 22, 22, 23, 20
         ];
         let skybox_vertex_buffer = CpuAccessibleBufferXalloc::<[VertexPositionUV]>::from_iter(
-            info.device.clone(), info.memory_pool.clone(), BufferUsage::all(),
+            info.device.clone(), BufferUsage::all(),
             skybox_verts.iter().cloned()).expect("failed to create buffer");
         let skybox_index_buffer = CpuAccessibleBufferXalloc::<[u32]>::from_iter(
-            info.device.clone(), info.memory_pool.clone(), BufferUsage::all(),
+            info.device.clone(), BufferUsage::all(),
             skybox_idxs.iter().cloned()).expect("failed to create buffer");
 
         let (skybox_texture, _future) = {
@@ -155,8 +155,8 @@ impl DeferredShadingRenderPipeline {
             voxel_shading_pipeline,
             framebuffers: None,
             renderpass,
-            voxel_uniform_buffer_pool: XallocCpuBufferPool::<DeferredShadingShaders::vertex::ty::InstanceData>::new(info.device.clone(), BufferUsage::all(), info.memory_pool.clone()),
-            skybox_uniform_buffer_pool: XallocCpuBufferPool::<SkyboxShaders::vertex::ty::Data>::new(info.device.clone(), BufferUsage::all(), info.memory_pool.clone()),
+            voxel_uniform_buffer_pool: XallocCpuBufferPool::<DeferredShadingShaders::vertex::ty::InstanceData>::new(info.device.clone(), BufferUsage::all()),
+            skybox_uniform_buffer_pool: XallocCpuBufferPool::<SkyboxShaders::vertex::ty::Data>::new(info.device.clone(), BufferUsage::all()),
             voxel_texture_descriptors,
             linear_sampler,
             skybox_vertex_buffer,
@@ -255,12 +255,12 @@ impl RenderPipelineAbstract for DeferredShadingRenderPipeline {
         if self.get_framebuffers_mut().is_none() {
             let new_framebuffers = Some(images.iter().map(|_image| {
                 let arc: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(self.get_renderpass().clone())
-                    .add(info.position_buffer_image.clone()).unwrap()
-                    .add(info.normal_buffer_image.clone()).unwrap()
-                    .add(info.albedo_buffer_image.clone()).unwrap()
-                    .add(info.roughness_buffer_image.clone()).unwrap()
-                    .add(info.metallic_buffer_image.clone()).unwrap()
-                    .add(info.depth_buffer_image.clone()).unwrap()
+                    .add(info.attachments.position.clone()).unwrap()
+                    .add(info.attachments.normal.clone()).unwrap()
+                    .add(info.attachments.albedo.clone()).unwrap()
+                    .add(info.attachments.roughness.clone()).unwrap()
+                    .add(info.attachments.metallic.clone()).unwrap()
+                    .add(info.attachments.main_depth.clone()).unwrap()
                     .build().unwrap());
                 arc
             }).collect::<Vec<_>>());

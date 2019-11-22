@@ -16,12 +16,11 @@ use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::swapchain::{Swapchain, Surface, SwapchainCreationError, SwapchainAcquireFuture};
 use vulkano::sync::GpuFuture;
 use vulkano::image::ImageUsage;
-
 use toolbox::Transform;
+
 use crate::camera::Camera;
 use crate::geometry::{VertexGroup, Material, VertexPositionObjectId, DeferredShadingVertex};
 use crate::registry::TextureRegistry;
-use crate::memory::xalloc::XallocMemoryPool;
 use crate::pipeline::{RenderPipelineAbstract, DeferredShadingRenderPipeline, DeferredLightingRenderPipeline, LinesRenderPipeline, TextRenderPipeline, OcclusionRenderPipeline, PostProcessRenderPipeline};
 use crate::buffer::CpuAccessibleBufferXalloc;
 use crate::geometry::VertexPositionColorAlpha;
@@ -54,6 +53,36 @@ pub const DEBUG_VISUALIZE_OCCLUSION_BUFFER: u32 = 8;
 pub const DEBUG_VISUALIZE_MAX: u32 = 9;
 
 
+lazy_static! {
+    static ref GBUFFER_USAGE: ImageUsage = ImageUsage {
+        color_attachment: true,
+        input_attachment: true,
+        ..ImageUsage::none()
+    };
+    static ref LUMA_BUFFER_USAGE: ImageUsage = ImageUsage {
+        color_attachment: true,
+        input_attachment: true,
+        transfer_source: true,
+        ..ImageUsage::none()
+    };
+}
+
+
+fn recreate_attachments(device: Arc<Device>, dimensions: [u32; 2], old_occlusion: Option<Arc<AttachmentImage<R32Uint>>>) -> RendererAttachments {
+    RendererAttachments {
+        position: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        normal: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        albedo: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        roughness: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        metallic: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        hdr_color: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        main_depth: AttachmentImage::transient(device.clone(), dimensions, D32Sfloat).unwrap(),
+        luma: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, LUMA_BUFFER_USAGE.clone()).unwrap(),
+        occlusion: old_occlusion
+    }
+}
+
+
 #[derive(Debug)]
 pub enum RendererDrawError {
     WindowMinimized,
@@ -63,11 +92,23 @@ pub enum RendererDrawError {
 
 
 #[derive(Clone)]
+pub struct RendererAttachments {
+    pub position: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub normal: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub albedo: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub roughness: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub metallic: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub hdr_color: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub main_depth: Arc<AttachmentImage<D32Sfloat>>,
+    pub luma: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub occlusion: Option<Arc<AttachmentImage<R32Uint>>>
+}
+
+
+#[derive(Clone)]
 pub struct RenderInfo {
     /// Vulkan device.
     pub device: Arc<Device>,
-    /// Memory pool for memory-managed objects.
-    pub memory_pool: XallocMemoryPool,
 
     pub queue_main: Arc<Queue>,
     pub queue_offscreen: Arc<Queue>,
@@ -84,15 +125,7 @@ pub struct RenderInfo {
     pub tex_registry: Arc<TextureRegistry>,
     pub reduction_solver: Arc<Mutex<ParallelReductionSolver>>,
 
-    pub depth_buffer_image: Arc<AttachmentImage<D32Sfloat>>,
-    pub position_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub normal_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub albedo_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub roughness_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub metallic_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub hdr_color_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub luma_buffer_image: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub occlusion_buffer_image: Option<Arc<AttachmentImage<R32Uint>>>,
+    pub attachments: RendererAttachments,
 
     pub render_queues: Arc<RwLock<RenderQueues>>,
 
@@ -205,36 +238,17 @@ impl Renderer {
                 .expect("failed to create swapchain")
         };
 
-        let gbuffer_usage = ImageUsage {
-            color_attachment: true,
-            input_attachment: true,
-            ..ImageUsage::none()
-        };
-        let position_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, gbuffer_usage.clone()).unwrap();
-        let normal_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, gbuffer_usage.clone()).unwrap();
-        let albedo_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, gbuffer_usage.clone()).unwrap();
-        let roughness_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, gbuffer_usage.clone()).unwrap();
-        let metallic_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, gbuffer_usage.clone()).unwrap();
-        let hdr_color_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, gbuffer_usage.clone()).unwrap();
-        let depth_buffer_image = AttachmentImage::transient(device.clone(), dimensions, D32Sfloat).unwrap();
-        let luma_buffer_image = AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, ImageUsage {
-            color_attachment: true,
-            input_attachment: true,
-            transfer_source: true,
-            ..ImageUsage::none()
-        }).unwrap();
+        let attachments = recreate_attachments(device.clone(), dimensions, None);
 
         let mut tex_registry = TextureRegistry::new();
         tex_registry.load(queue_main.clone());
         let tex_registry = Arc::new(tex_registry);
 
-        let memory_pool = XallocMemoryPool::new(device.clone());
+        let chunk_lines_vg = Arc::new(VertexGroup::new(Vec::<VertexPositionColorAlpha>::new().iter().cloned(), Vec::new().iter().cloned(), 0, device.clone()));
+        let occlusion_vg = Arc::new(VertexGroup::new(Vec::<VertexPositionObjectId>::new().iter().cloned(), Vec::new().iter().cloned(), 0, device.clone()));
+        let occlusion_cpu_buffer = CpuAccessibleBufferXalloc::<[u32]>::from_iter(device.clone(), BufferUsage::all(), vec![0u32; 320*240].iter().cloned()).expect("failed to create buffer");
 
-        let chunk_lines_vg = Arc::new(VertexGroup::new(Vec::<VertexPositionColorAlpha>::new().iter().cloned(), Vec::new().iter().cloned(), 0, device.clone(), memory_pool.clone()));
-        let occlusion_vg = Arc::new(VertexGroup::new(Vec::<VertexPositionObjectId>::new().iter().cloned(), Vec::new().iter().cloned(), 0, device.clone(), memory_pool.clone()));
-        let occlusion_cpu_buffer = CpuAccessibleBufferXalloc::<[u32]>::from_iter(device.clone(), memory_pool.clone(), BufferUsage::all(), vec![0u32; 320*240].iter().cloned()).expect("failed to create buffer");
-
-        let reduction_solver = Arc::new(Mutex::new(ParallelReductionSolver::new(device.clone(), memory_pool.clone())));
+        let reduction_solver = Arc::new(Mutex::new(ParallelReductionSolver::new(device.clone())));
 
         let mut info = RenderInfo {
             device,
@@ -250,13 +264,7 @@ impl Renderer {
             queue_main,
             queue_offscreen,
             queue_compute,
-            position_buffer_image,
-            normal_buffer_image,
-            albedo_buffer_image,
-            roughness_buffer_image,
-            metallic_buffer_image,
-            hdr_color_buffer_image,
-            luma_buffer_image,
+            attachments,
             render_queues: Arc::new(RwLock::new(RenderQueues {
                 lines: LineRenderQueue {
                     chunk_lines_vg,
@@ -269,10 +277,7 @@ impl Renderer {
                 },
                 meshes: Vec::new()
             })),
-            memory_pool,
-            depth_buffer_image,
             debug_visualize_setting: DEBUG_VISUALIZE_DISABLED,
-            occlusion_buffer_image: None,
         };
 
         let mut pipelines = Vec::<Box<dyn RenderPipelineAbstract>>::with_capacity(3);
@@ -331,37 +336,11 @@ impl Renderer {
                 Err(err) => panic!("{:?}", err)
             };
 
-            let gbuffer_usage = ImageUsage {
-                color_attachment: true,
-                input_attachment: true,
-                ..ImageUsage::none()
-            };
-
             std::mem::replace(&mut self.swapchain, new_swapchain);
             std::mem::replace(&mut self.images, new_images);
 
-            // TODO: clean this up (make buffers more generic, store format)
-            let new_depth_buffer = AttachmentImage::transient(self.info.device.clone(), self.info.dimensions, D32Sfloat).unwrap();
-            std::mem::replace(&mut self.info.depth_buffer_image, new_depth_buffer);
-            let new_position_buffer  = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
-            std::mem::replace(&mut self.info.position_buffer_image, new_position_buffer);
-            let new_normal_buffer    = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
-            std::mem::replace(&mut self.info.normal_buffer_image, new_normal_buffer);
-            let new_albedo_buffer    = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
-            std::mem::replace(&mut self.info.albedo_buffer_image, new_albedo_buffer);
-            let new_roughness_buffer = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
-            std::mem::replace(&mut self.info.roughness_buffer_image, new_roughness_buffer);
-            let new_metallic_buffer  = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
-            std::mem::replace(&mut self.info.metallic_buffer_image, new_metallic_buffer);
-            let new_hdr_buffer       = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, gbuffer_usage).unwrap();
-            std::mem::replace(&mut self.info.hdr_color_buffer_image, new_hdr_buffer);
-            let new_luma_buffer_image = AttachmentImage::with_usage(self.info.device.clone(), self.info.dimensions, R16G16B16A16Sfloat, ImageUsage {
-                color_attachment: true,
-                input_attachment: true,
-                transfer_source: true,
-                ..ImageUsage::none()
-            }).unwrap();
-            std::mem::replace(&mut self.info.luma_buffer_image, new_luma_buffer_image);
+            self.info.attachments = recreate_attachments(self.info.device.clone(), self.info.dimensions,
+                                                         Some(self.info.attachments.occlusion.as_ref().unwrap().clone()));
 
             for p in self.pipelines.iter_mut() {
                 p.remove_framebuffers();

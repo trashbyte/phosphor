@@ -53,14 +53,15 @@ impl PostProcessRenderPipeline {
                 .unwrap())
         };
 
-        let fullscreen_vertex_buffer = CpuAccessibleBufferXalloc::<[VertexPosition]>::from_iter(info.device.clone(), info.memory_pool.clone(), BufferUsage::all(), vec![
-            VertexPosition { position: [ -1.0,  1.0, 1.0 ] },
-            VertexPosition { position: [  1.0,  1.0, 1.0 ] },
-            VertexPosition { position: [  1.0, -1.0, 1.0 ] },
-            VertexPosition { position: [ -1.0,  1.0, 1.0 ] },
-            VertexPosition { position: [  1.0, -1.0, 1.0 ] },
-            VertexPosition { position: [ -1.0, -1.0, 1.0 ] },
-        ].iter().cloned()).expect("failed to create buffer");
+        let fullscreen_vertex_buffer = CpuAccessibleBufferXalloc::<[VertexPosition]>::from_iter(
+            info.device.clone(), BufferUsage::all(), vec![
+                VertexPosition { position: [ -1.0,  1.0, 1.0 ] },
+                VertexPosition { position: [  1.0,  1.0, 1.0 ] },
+                VertexPosition { position: [  1.0, -1.0, 1.0 ] },
+                VertexPosition { position: [ -1.0,  1.0, 1.0 ] },
+                VertexPosition { position: [  1.0, -1.0, 1.0 ] },
+                VertexPosition { position: [ -1.0, -1.0, 1.0 ] },
+            ].iter().cloned()).expect("failed to create buffer");
 
         let occlusion_buf_sampler = Sampler::new(info.device.clone(), Filter::Nearest, Filter::Nearest, MipmapMode::Linear,
                                                  SamplerAddressMode::Repeat, SamplerAddressMode::Repeat, SamplerAddressMode::Repeat,
@@ -89,8 +90,8 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
 
     fn build_command_buffer(&mut self, info: &RenderInfo) -> (AutoCommandBuffer, Arc<Queue>) {
         let descriptor_set = Arc::new(PersistentDescriptorSet::start(self.pipeline.clone(), 0)
-            .add_image(info.hdr_color_buffer_image.clone()).unwrap()
-            .add_sampled_image(info.occlusion_buffer_image.as_ref().unwrap().clone(), self.occlusion_buf_sampler.clone()).unwrap()
+            .add_image(info.attachments.hdr_color.clone()).unwrap()
+            .add_sampled_image(info.attachments.occlusion.as_ref().unwrap().clone(), self.occlusion_buf_sampler.clone()).unwrap()
             .build().unwrap()
         );
 
@@ -127,9 +128,9 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
         if self.get_framebuffers_mut().is_none() {
             let new_framebuffers = Some(images.iter().map(|image| {
                 let arc: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(self.get_renderpass().clone())
-                    .add(info.hdr_color_buffer_image.clone()).unwrap()
+                    .add(info.attachments.hdr_color.clone()).unwrap()
                     .add(image.clone()).unwrap()
-                    .add(info.luma_buffer_image.clone()).unwrap()
+                    .add(info.attachments.luma.clone()).unwrap()
                     .build().unwrap());
                 arc
             }).collect::<Vec<_>>());

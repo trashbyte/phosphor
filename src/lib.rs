@@ -3,7 +3,7 @@
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate vulkano;
 #[macro_use] extern crate lumberjack;
-#[macro_use] extern crate imgui;
+extern crate imgui;
 
 extern crate cgmath;
 extern crate fnv;
@@ -12,6 +12,7 @@ extern crate hashbrown;
 extern crate image;
 extern crate noise;
 extern crate parking_lot;
+extern crate make_names;
 extern crate rand;
 extern crate rusttype;
 extern crate vulkano_shaders;
@@ -26,6 +27,7 @@ pub mod compute;
 pub mod cpu_pool;
 pub mod geometry;
 pub mod memory;
+#[macro_use] mod names;
 pub mod pipeline;
 pub mod registry;
 pub mod renderer;

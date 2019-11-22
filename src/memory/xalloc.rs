@@ -23,6 +23,21 @@ use fnv::FnvHasher;
 use xalloc::{TlsfRegion, SysTlsf};
 use xalloc::arena::sys;
 
+
+static mut GLOBAL_POOL: Option<XallocMemoryPool> = None;
+
+pub fn get_global_pool(device: Arc<Device>) -> XallocMemoryPool {
+    let pool;
+    unsafe {
+        if GLOBAL_POOL.is_none() {
+            GLOBAL_POOL = Some(XallocMemoryPool::new(device.clone()));
+        }
+        pool = GLOBAL_POOL.as_ref().unwrap().clone();
+    }
+    pool
+}
+
+
 /// Chunk size for [XallocMemoryPool] in bytes
 pub const XALLOC_POOL_CHUNK_SIZE: usize = 1024 * 1024 * 64;
 

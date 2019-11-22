@@ -42,7 +42,7 @@ pub trait RenderPipelineAbstract {
             let new_framebuffers = Some(images.iter().map(|image| {
                 let arc: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(self.get_renderpass().clone())
                     .add(image.clone()).unwrap()
-                    .add(info.depth_buffer_image.clone()).unwrap()
+                    .add(info.attachments.main_depth.clone()).unwrap()
                     .build().unwrap());
                 arc
             }).collect::<Vec<_>>());

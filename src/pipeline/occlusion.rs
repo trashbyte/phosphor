@@ -65,7 +65,7 @@ impl OcclusionRenderPipeline {
                                                          sampled: true,
                                                          ..ImageUsage::none()
                                                      }).unwrap();
-        info.occlusion_buffer_image = Some(color_attachment.clone());
+        info.attachments.occlusion = Some(color_attachment.clone());
 
         let framebuffer = Arc::new(Framebuffer::start(renderpass.clone())
             .add(color_attachment.clone()).unwrap()

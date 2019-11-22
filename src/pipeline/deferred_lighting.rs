@@ -51,7 +51,7 @@ impl DeferredLightingRenderPipeline {
         };
 
         let fullscreen_vertex_buffer = CpuAccessibleBufferXalloc::<[VertexPosition]>::from_iter(
-            info.device.clone(), info.memory_pool.clone(), BufferUsage::all(), vec![
+            info.device.clone(), BufferUsage::all(), vec![
                 VertexPosition { position: [ -1.0,  1.0, 1.0 ] },
                 VertexPosition { position: [  1.0,  1.0, 1.0 ] },
                 VertexPosition { position: [  1.0, -1.0, 1.0 ] },
@@ -81,11 +81,11 @@ impl RenderPipelineAbstract for DeferredLightingRenderPipeline {
 
     fn build_command_buffer(&mut self, info: &RenderInfo) -> (AutoCommandBuffer, Arc<Queue>) {
         let descriptor_set = Arc::new(PersistentDescriptorSet::start(self.voxel_lighting_pipeline.clone(), 0)
-            .add_image(info.position_buffer_image.clone()).unwrap()
-            .add_image(info.normal_buffer_image.clone()).unwrap()
-            .add_image(info.albedo_buffer_image.clone()).unwrap()
-            .add_image(info.roughness_buffer_image.clone()).unwrap()
-            .add_image(info.metallic_buffer_image.clone()).unwrap()
+            .add_image(info.attachments.position.clone()).unwrap()
+            .add_image(info.attachments.normal.clone()).unwrap()
+            .add_image(info.attachments.albedo.clone()).unwrap()
+            .add_image(info.attachments.roughness.clone()).unwrap()
+            .add_image(info.attachments.metallic.clone()).unwrap()
             .build().unwrap());
 
         let mut cb = AutoCommandBufferBuilder::primary_one_time_submit(info.device.clone(), info.queue_main.family())
@@ -121,12 +121,12 @@ impl RenderPipelineAbstract for DeferredLightingRenderPipeline {
         if self.get_framebuffers_mut().is_none() {
             let new_framebuffers = Some(images.iter().map(|_| {
                 let arc: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(self.get_renderpass().clone())
-                    .add(info.position_buffer_image.clone()).unwrap()
-                    .add(info.normal_buffer_image.clone()).unwrap()
-                    .add(info.albedo_buffer_image.clone()).unwrap()
-                    .add(info.roughness_buffer_image.clone()).unwrap()
-                    .add(info.metallic_buffer_image.clone()).unwrap()
-                    .add(info.hdr_color_buffer_image.clone()).unwrap()
+                    .add(info.attachments.position.clone()).unwrap()
+                    .add(info.attachments.normal.clone()).unwrap()
+                    .add(info.attachments.albedo.clone()).unwrap()
+                    .add(info.attachments.roughness.clone()).unwrap()
+                    .add(info.attachments.metallic.clone()).unwrap()
+                    .add(info.attachments.hdr_color.clone()).unwrap()
                     .build().unwrap());
                 arc
             }).collect::<Vec<_>>());

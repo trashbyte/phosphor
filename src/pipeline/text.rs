@@ -143,7 +143,6 @@ impl TextRenderPipeline {
             font: Box::new(Font::from_bytes(include_bytes!("../../../fonts/Roboto-Regular.ttf") as & [u8]).unwrap()),
             cache: Box::new(Cache::builder().dimensions(CACHE_SIZE as u32, CACHE_SIZE as u32).build()),
             cache_buffer: CpuAccessibleBufferXalloc::from_iter(info.device.clone(),
-                                                               info.memory_pool.clone(),
                                                                BufferUsage::all(),
                                                                (0 .. CACHE_SIZE*CACHE_SIZE).map(|_| 0u8)
                                                     ).expect("failed to create buffer"),
@@ -158,7 +157,6 @@ impl TextRenderPipeline {
             font: Box::new(Font::from_bytes(include_bytes!("../../../fonts/FiraMono-Regular.ttf") as & [u8]).unwrap()),
             cache: Box::new(Cache::builder().dimensions(CACHE_SIZE as u32, CACHE_SIZE as u32).build()),
             cache_buffer: CpuAccessibleBufferXalloc::from_iter(info.device.clone(),
-                                                               info.memory_pool.clone(),
                                                                BufferUsage::all(),
                                                                (0 .. CACHE_SIZE*CACHE_SIZE).map(|_| 0u8)
             ).expect("failed to create buffer"),
@@ -272,7 +270,6 @@ impl RenderPipelineAbstract for TextRenderPipeline {
                 }
                 let vertex_buffer = CpuAccessibleBufferXalloc::<[VertexPositionUVColor]>::from_iter(
                     info.device.clone(),
-                    info.memory_pool.clone(),
                     BufferUsage::all(),
                     vertices.iter().cloned()
                 ).unwrap();

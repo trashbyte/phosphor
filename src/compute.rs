@@ -8,7 +8,6 @@ use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::device::{Device, Queue};
 use vulkano::sync::GpuFuture;
-use crate::memory::XallocMemoryPool;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 
@@ -36,7 +35,7 @@ pub struct ParallelReductionSolver {
 }
 
 impl ParallelReductionSolver {
-    pub fn new(device: Arc<Device>, memory_pool: XallocMemoryPool) -> Self {
+    pub fn new(device: Arc<Device>) -> Self {
         let pipeline = Arc::new({
             let shader = crate::shader::reduction::Shader::load(device.clone()).unwrap();
             ComputePipeline::new(device.clone(), &shader.main_entry_point(), &()).unwrap()
@@ -49,9 +48,9 @@ impl ParallelReductionSolver {
             ..BufferUsage::none()
         };
 
-        let source_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), memory_pool.clone(), storage_buf_usage.clone(), [0u16; 1024*768*4].iter().cloned()).unwrap();
-        let intermediate_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), memory_pool.clone(), storage_buf_usage.clone(), [0u16; 6144].iter().cloned()).unwrap();
-        let dest_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), memory_pool.clone(), storage_buf_usage.clone(), [0u16; 64].iter().cloned()).unwrap();
+        let source_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(),  storage_buf_usage.clone(), [0u16; 1024*768*4].iter().cloned()).unwrap();
+        let intermediate_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), storage_buf_usage.clone(), [0u16; 6144].iter().cloned()).unwrap();
+        let dest_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), storage_buf_usage.clone(), [0u16; 64].iter().cloned()).unwrap();
 
         let stage1_ds = Arc::new(PersistentDescriptorSet::start(pipeline.clone(), 0)
             .add_buffer(source_buffer.clone()).unwrap()

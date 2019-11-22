@@ -31,21 +31,17 @@ use vulkano::memory::pool::PotentialDedicatedAllocation;
 use vulkano::sync::AccessError;
 use vulkano::sync::Sharing;
 
-use crate::memory::XallocMemoryPool;
 use vulkano::OomError;
+use crate::memory::xalloc::get_global_pool;
 
 
-pub struct XallocCpuBufferPool<T, A = XallocMemoryPool>
-    where A: MemoryPool
+pub struct XallocCpuBufferPool<T>
 {
     // The device of the pool.
     device: Arc<Device>,
 
-    // The memory pool to use for allocations.
-    pool: A,
-
     // Current buffer from which elements are grabbed.
-    current_buffer: Mutex<Option<Arc<ActualBuffer<A>>>>,
+    current_buffer: Mutex<Option<Arc<ActualBuffer>>>,
 
     // Buffer usage.
     usage: BufferUsage,
@@ -55,14 +51,13 @@ pub struct XallocCpuBufferPool<T, A = XallocMemoryPool>
 }
 
 // One buffer of the pool.
-struct ActualBuffer<A>
-    where A: MemoryPool
+struct ActualBuffer
 {
     // Inner content.
     inner: UnsafeBuffer,
 
     // The memory held by the buffer.
-    memory: PotentialDedicatedAllocation<A::Alloc>,
+    memory: PotentialDedicatedAllocation<<crate::memory::xalloc::XallocMemoryPool as MemoryPool>::Alloc>,
 
     // List of the chunks that are reserved.
     chunks_in_use: Mutex<Vec<ActualBufferChunk>>,
@@ -94,10 +89,8 @@ struct ActualBufferChunk {
 /// A subbuffer allocated from a `CpuBufferPool`.
 ///
 /// When this object is destroyed, the subbuffer is automatically reclaimed by the pool.
-pub struct XallocCpuBufferPoolChunk<T, A>
-    where A: MemoryPool
-{
-    buffer: Arc<ActualBuffer<A>>,
+pub struct XallocCpuBufferPoolChunk<T> {
+    buffer: Arc<ActualBuffer>,
 
     // Index of the subbuffer within `buffer`. In number of elements.
     index: usize,
@@ -117,20 +110,17 @@ pub struct XallocCpuBufferPoolChunk<T, A>
 /// A subbuffer allocated from a `CpuBufferPool`.
 ///
 /// When this object is destroyed, the subbuffer is automatically reclaimed by the pool.
-pub struct XallocCpuBufferPoolSubbuffer<T, A>
-    where A: MemoryPool
-{
+pub struct XallocCpuBufferPoolSubbuffer<T> {
     // This struct is just a wrapper around `CpuBufferPoolChunk`.
-    chunk: XallocCpuBufferPoolChunk<T, A>,
+    chunk: XallocCpuBufferPoolChunk<T>,
 }
 
 impl<T> XallocCpuBufferPool<T> {
     /// Builds a `CpuBufferPool`.
     #[inline]
-    pub fn new(device: Arc<Device>, usage: BufferUsage, pool: XallocMemoryPool) -> XallocCpuBufferPool<T> {
+    pub fn new(device: Arc<Device>, usage: BufferUsage) -> XallocCpuBufferPool<T> {
         XallocCpuBufferPool {
             device,
-            pool: pool.clone(),
             current_buffer: Mutex::new(None),
             usage: usage.clone(),
             marker: PhantomData,
@@ -142,8 +132,8 @@ impl<T> XallocCpuBufferPool<T> {
     /// Shortcut for a pool that can only be used as transfer source and with exclusive queue
     /// family accesses.
     #[inline]
-    pub fn upload(device: Arc<Device>, pool: XallocMemoryPool) -> XallocCpuBufferPool<T> {
-        XallocCpuBufferPool::new(device, BufferUsage::transfer_source(), pool)
+    pub fn upload(device: Arc<Device>) -> XallocCpuBufferPool<T> {
+        XallocCpuBufferPool::new(device, BufferUsage::transfer_source())
     }
 
     /// Builds a `CpuBufferPool` meant for simple downloads.
@@ -151,8 +141,8 @@ impl<T> XallocCpuBufferPool<T> {
     /// Shortcut for a pool that can only be used as transfer destination and with exclusive queue
     /// family accesses.
     #[inline]
-    pub fn download(device: Arc<Device>, pool: XallocMemoryPool) -> XallocCpuBufferPool<T> {
-        XallocCpuBufferPool::new(device, BufferUsage::transfer_destination(), pool)
+    pub fn download(device: Arc<Device>) -> XallocCpuBufferPool<T> {
+        XallocCpuBufferPool::new(device, BufferUsage::transfer_destination())
     }
 
     /// Builds a `CpuBufferPool` meant for usage as a uniform buffer.
@@ -160,8 +150,8 @@ impl<T> XallocCpuBufferPool<T> {
     /// Shortcut for a pool that can only be used as uniform buffer and with exclusive queue
     /// family accesses.
     #[inline]
-    pub fn uniform_buffer(device: Arc<Device>, pool: XallocMemoryPool) -> XallocCpuBufferPool<T> {
-        XallocCpuBufferPool::new(device, BufferUsage::uniform_buffer(), pool)
+    pub fn uniform_buffer(device: Arc<Device>) -> XallocCpuBufferPool<T> {
+        XallocCpuBufferPool::new(device, BufferUsage::uniform_buffer())
     }
 
     /// Builds a `CpuBufferPool` meant for usage as a vertex buffer.
@@ -169,8 +159,8 @@ impl<T> XallocCpuBufferPool<T> {
     /// Shortcut for a pool that can only be used as vertex buffer and with exclusive queue
     /// family accesses.
     #[inline]
-    pub fn vertex_buffer(device: Arc<Device>, pool: XallocMemoryPool) -> XallocCpuBufferPool<T> {
-        XallocCpuBufferPool::new(device, BufferUsage::vertex_buffer(), pool)
+    pub fn vertex_buffer(device: Arc<Device>) -> XallocCpuBufferPool<T> {
+        XallocCpuBufferPool::new(device, BufferUsage::vertex_buffer())
     }
 
     /// Builds a `CpuBufferPool` meant for usage as a indirect buffer.
@@ -178,14 +168,12 @@ impl<T> XallocCpuBufferPool<T> {
     /// Shortcut for a pool that can only be used as indirect buffer and with exclusive queue
     /// family accesses.
     #[inline]
-    pub fn indirect_buffer(device: Arc<Device>, pool: XallocMemoryPool) -> XallocCpuBufferPool<T> {
-        XallocCpuBufferPool::new(device, BufferUsage::indirect_buffer(), pool)
+    pub fn indirect_buffer(device: Arc<Device>) -> XallocCpuBufferPool<T> {
+        XallocCpuBufferPool::new(device, BufferUsage::indirect_buffer())
     }
 }
 
-impl<T, A> XallocCpuBufferPool<T, A>
-    where A: MemoryPool
-{
+impl<T> XallocCpuBufferPool<T> {
     /// Returns the current capacity of the pool, in number of elements.
     pub fn capacity(&self) -> usize {
         match *self.current_buffer.lock().unwrap() {
@@ -220,7 +208,7 @@ impl<T, A> XallocCpuBufferPool<T, A>
     /// > **Note**: You can think of it like a `Vec`. If you insert an element and the `Vec` is not
     /// > large enough, a new chunk of memory is automatically allocated.
     #[inline]
-    pub fn next(&self, data: T) -> Result<XallocCpuBufferPoolSubbuffer<T, A>, DeviceMemoryAllocError> {
+    pub fn next(&self, data: T) -> Result<XallocCpuBufferPoolSubbuffer<T>, DeviceMemoryAllocError> {
         Ok(XallocCpuBufferPoolSubbuffer { chunk: self.chunk(iter::once(data))? })
     }
 
@@ -236,7 +224,7 @@ impl<T, A> XallocCpuBufferPool<T, A>
     ///
     /// Panics if the length of the iterator didn't match the actual number of element.
     ///
-    pub fn chunk<I>(&self, data: I) -> Result<XallocCpuBufferPoolChunk<T, A>, DeviceMemoryAllocError>
+    pub fn chunk<I>(&self, data: I) -> Result<XallocCpuBufferPoolChunk<T>, DeviceMemoryAllocError>
         where I: IntoIterator<Item = T>,
               I::IntoIter: ExactSizeIterator
     {
@@ -269,7 +257,7 @@ impl<T, A> XallocCpuBufferPool<T, A>
     /// A `CpuBufferPool` is always empty the first time you use it, so you shouldn't use
     /// `try_next` the first time you use it.
     #[inline]
-    pub fn try_next(&self, data: T) -> Option<XallocCpuBufferPoolSubbuffer<T, A>> {
+    pub fn try_next(&self, data: T) -> Option<XallocCpuBufferPoolSubbuffer<T>> {
         let mut mutex = self.current_buffer.lock().unwrap();
         self.try_next_impl(&mut mutex, iter::once(data))
             .map(|c| XallocCpuBufferPoolSubbuffer { chunk: c })
@@ -279,7 +267,7 @@ impl<T, A> XallocCpuBufferPool<T, A>
     // Creates a new buffer and sets it as current. The capacity is in number of elements.
     //
     // `cur_buf_mutex` must be an active lock of `self.current_buffer`.
-    fn reset_buf(&self, cur_buf_mutex: &mut MutexGuard<Option<Arc<ActualBuffer<A>>>>,
+    fn reset_buf(&self, cur_buf_mutex: &mut MutexGuard<Option<Arc<ActualBuffer>>>,
                  capacity: usize)
                  -> Result<(), DeviceMemoryAllocError> {
         unsafe {
@@ -302,7 +290,8 @@ impl<T, A> XallocCpuBufferPool<T, A>
                 }
             };
 
-            let mem = MemoryPool::alloc_from_requirements(&self.pool,
+            let pool = get_global_pool(self.device.clone());
+            let mem = MemoryPool::alloc_from_requirements(&pool,
                                         &mem_reqs,
                                         AllocLayout::Linear,
                                         MappingRequirement::Map,
@@ -317,7 +306,7 @@ impl<T, A> XallocCpuBufferPool<T, A>
                                                 memory: mem,
                                                 chunks_in_use: Mutex::new(vec![]),
                                                 next_index: AtomicUsize::new(0),
-                                                capacity: capacity,
+                                                capacity,
                                             }));
 
             Ok(())
@@ -334,9 +323,9 @@ impl<T, A> XallocCpuBufferPool<T, A>
     //
     // Panics if the length of the iterator didn't match the actual number of element.
     //
-    fn try_next_impl<I>(&self, cur_buf_mutex: &mut MutexGuard<Option<Arc<ActualBuffer<A>>>>,
+    fn try_next_impl<I>(&self, cur_buf_mutex: &mut MutexGuard<Option<Arc<ActualBuffer>>>,
                         mut data: I)
-                        -> Result<XallocCpuBufferPoolChunk<T, A>, I>
+                        -> Result<XallocCpuBufferPoolChunk<T>, I>
         where I: ExactSizeIterator<Item = T>
     {
         // Grab the current buffer. Return `Err` if the pool wasn't "initialized" yet.
@@ -474,15 +463,12 @@ impl<T, A> XallocCpuBufferPool<T, A>
 }
 
 // Can't automatically derive `Clone`, otherwise the compiler adds a `T: Clone` requirement.
-impl<T, A> Clone for XallocCpuBufferPool<T, A>
-    where A: MemoryPool + Clone
-{
+impl<T> Clone for XallocCpuBufferPool<T> {
     fn clone(&self) -> Self {
         let buf = self.current_buffer.lock().unwrap();
 
         XallocCpuBufferPool {
             device: self.device.clone(),
-            pool: self.pool.clone(),
             current_buffer: Mutex::new(buf.clone()),
             usage: self.usage.clone(),
             marker: PhantomData,
@@ -490,19 +476,15 @@ impl<T, A> Clone for XallocCpuBufferPool<T, A>
     }
 }
 
-unsafe impl<T, A> DeviceOwned for XallocCpuBufferPool<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> DeviceOwned for XallocCpuBufferPool<T> {
     #[inline]
     fn device(&self) -> &Arc<Device> {
         &self.device
     }
 }
 
-impl<T, A> Clone for XallocCpuBufferPoolChunk<T, A>
-    where A: MemoryPool
-{
-    fn clone(&self) -> XallocCpuBufferPoolChunk<T, A> {
+impl<T> Clone for XallocCpuBufferPoolChunk<T> {
+    fn clone(&self) -> XallocCpuBufferPoolChunk<T> {
         let mut chunks_in_use_lock = self.buffer.chunks_in_use.lock().unwrap();
         let chunk = chunks_in_use_lock
             .iter_mut()
@@ -525,9 +507,7 @@ impl<T, A> Clone for XallocCpuBufferPoolChunk<T, A>
     }
 }
 
-unsafe impl<T, A> BufferAccess for XallocCpuBufferPoolChunk<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> BufferAccess for XallocCpuBufferPoolChunk<T> {
     #[inline]
     fn inner(&self) -> BufferInner {
         BufferInner {
@@ -616,9 +596,7 @@ unsafe impl<T, A> BufferAccess for XallocCpuBufferPoolChunk<T, A>
     }
 }
 
-impl<T, A> Drop for XallocCpuBufferPoolChunk<T, A>
-    where A: MemoryPool
-{
+impl<T> Drop for XallocCpuBufferPoolChunk<T> {
     fn drop(&mut self) {
         // If `requested_len` is 0, then no entry was added in the chunks.
         if self.requested_len == 0 {
@@ -640,32 +618,24 @@ impl<T, A> Drop for XallocCpuBufferPoolChunk<T, A>
     }
 }
 
-unsafe impl<T, A> TypedBufferAccess for XallocCpuBufferPoolChunk<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> TypedBufferAccess for XallocCpuBufferPoolChunk<T> {
     type Content = [T];
 }
 
-unsafe impl<T, A> DeviceOwned for XallocCpuBufferPoolChunk<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> DeviceOwned for XallocCpuBufferPoolChunk<T> {
     #[inline]
     fn device(&self) -> &Arc<Device> {
         self.buffer.inner.device()
     }
 }
 
-impl<T, A> Clone for XallocCpuBufferPoolSubbuffer<T, A>
-    where A: MemoryPool
-{
-    fn clone(&self) -> XallocCpuBufferPoolSubbuffer<T, A> {
+impl<T> Clone for XallocCpuBufferPoolSubbuffer<T> {
+    fn clone(&self) -> XallocCpuBufferPoolSubbuffer<T> {
         XallocCpuBufferPoolSubbuffer { chunk: self.chunk.clone() }
     }
 }
 
-unsafe impl<T, A> BufferAccess for XallocCpuBufferPoolSubbuffer<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> BufferAccess for XallocCpuBufferPoolSubbuffer<T> {
     #[inline]
     fn inner(&self) -> BufferInner {
         self.chunk.inner()
@@ -707,15 +677,11 @@ unsafe impl<T, A> BufferAccess for XallocCpuBufferPoolSubbuffer<T, A>
     }
 }
 
-unsafe impl<T, A> TypedBufferAccess for XallocCpuBufferPoolSubbuffer<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> TypedBufferAccess for XallocCpuBufferPoolSubbuffer<T> {
     type Content = T;
 }
 
-unsafe impl<T, A> DeviceOwned for XallocCpuBufferPoolSubbuffer<T, A>
-    where A: MemoryPool
-{
+unsafe impl<T> DeviceOwned for XallocCpuBufferPoolSubbuffer<T> {
     #[inline]
     fn device(&self) -> &Arc<Device> {
         self.chunk.buffer.inner.device()

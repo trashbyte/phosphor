@@ -26,6 +26,9 @@ imgui = "0.2.1"
 vulkano-shaders = { version = "0.16.0", path = "../vulkano-shaders" }
 lumberjack = { path = "../lumberjack" }
 toolbox = { path = "../toolbox" }
+make_names = { path = "../make_names" }
 
 [build-dependencies]
 rerun_except = "0.1.0"
+walkdir = "2.2.9"
+regex = "1.3.1"

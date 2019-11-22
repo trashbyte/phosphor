@@ -53,7 +53,7 @@ impl LinesRenderPipeline {
             vulkan_pipeline: pipeline,
             framebuffers: None,
             renderpass,
-            uniform_buffer_pool: XallocCpuBufferPool::<LinesShaders::vertex::ty::Data>::new(info.device.clone(), BufferUsage::all(), info.memory_pool.clone()),
+            uniform_buffer_pool: XallocCpuBufferPool::<LinesShaders::vertex::ty::Data>::new(info.device.clone(), BufferUsage::all()),
         }
     }
 }

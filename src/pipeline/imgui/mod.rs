@@ -163,7 +163,7 @@ impl ImguiRenderPipeline {
         let mut cbs = Vec::new();
         for draw_list in draw_data.draw_lists() {
             let vtx_buffer = CpuAccessibleBufferXalloc::from_iter(
-                info.device.clone(), info.memory_pool.clone(), BufferUsage::vertex_buffer(),
+                info.device.clone(), BufferUsage::vertex_buffer(),
                 draw_list.vtx_buffer()
                     .iter()
                     .map(|v| { Vertex { pos: v.pos, uv: v.uv, col: [v.col[0] as f32, v.col[1] as f32, v.col[2] as f32, v.col[3] as f32] } })).unwrap();
@@ -177,7 +177,7 @@ impl ImguiRenderPipeline {
                     } => {
                         let idx_end = idx_start + count;
                         // TODO: don't make new buffers for every draw
-                        let idx_buffer = CpuAccessibleBufferXalloc::from_iter(info.device.clone(), info.memory_pool.clone(), BufferUsage::index_buffer(), draw_list.idx_buffer().iter().skip(idx_start).take(count).map(|i| { *i })).unwrap();
+                        let idx_buffer = CpuAccessibleBufferXalloc::from_iter(info.device.clone(), BufferUsage::index_buffer(), draw_list.idx_buffer().iter().skip(idx_start).take(count).map(|i| { *i })).unwrap();
                         let clip_rect = [
                             (clip_rect[0] - clip_off[0]) * clip_scale[0],
                             (clip_rect[1] - clip_off[1]) * clip_scale[1],
