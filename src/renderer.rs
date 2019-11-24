@@ -349,7 +349,7 @@ impl Renderer {
     }
 
     /// Draw all objects in the render queue. Called every frame in the game loop.
-    pub fn draw(&mut self, camera: &Camera, dt: f32, transform: Transform) -> Result<SwapchainAcquireFuture<Window>, RendererDrawError> {
+    pub fn draw(&mut self, camera: &Camera, _dt: f32, transform: Transform) -> Result<SwapchainAcquireFuture<Window>, RendererDrawError> {
         self.info.dimensions = match self.surface.window().get_inner_size() {
             Some(logical_size) => [logical_size.width as u32, logical_size.height as u32],
             None => [800, 600]
@@ -433,7 +433,7 @@ impl Renderer {
         let ev100 = (avg_luma * 100.0 / 12.5).log2() + tonemap_info.exposure_adjustment;
         let max_luma = 1.2 * 2f32.powf(ev100);
         let exposure = 1.0 / max_luma;
-        let exposure = exposure.max(tonemap_info.min_exposure);
+        let _exposure = exposure.max(tonemap_info.min_exposure);
 
         self.info.tonemapping_info = TonemappingInfo {
             adjust_speed: 0.5,

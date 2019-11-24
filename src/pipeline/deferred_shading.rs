@@ -1,18 +1,15 @@
 use std::sync::Arc;
-use std::path::Path;
 
 use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, AutoCommandBuffer, DynamicState};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::descriptor::DescriptorSet;
 use vulkano::device::Queue;
-use vulkano::format::R8G8B8A8Srgb;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPass, RenderPassDesc, Subpass, RenderPassAbstract};
-use vulkano::image::{SwapchainImage, ImmutableImage};
+use vulkano::image::SwapchainImage;
 use vulkano::pipeline::viewport::Viewport;
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 use vulkano::sampler::{Sampler, Filter, SamplerAddressMode, MipmapMode};
-use vulkano::image::Dimensions::Dim2d;
 use winit::Window;
 
 use crate::cpu_pool::XallocCpuBufferPool;
@@ -34,7 +31,6 @@ pub struct DeferredShadingRenderPipeline {
     voxel_uniform_buffer_pool: XallocCpuBufferPool<DeferredShadingShaders::vertex::ty::InstanceData>,
     // TODO: texture bindings per material
     voxel_texture_descriptors: Arc<dyn DescriptorSet + Send + Sync>,
-    linear_sampler: Arc<Sampler>,
     skybox_vertex_buffer: Arc<CpuAccessibleBufferXalloc<[VertexPositionUV]>>,
     skybox_index_buffer: Arc<CpuAccessibleBufferXalloc<[u32]>>,
 }
@@ -147,7 +143,6 @@ impl DeferredShadingRenderPipeline {
             renderpass,
             voxel_uniform_buffer_pool: XallocCpuBufferPool::<DeferredShadingShaders::vertex::ty::InstanceData>::new(info.device.clone(), BufferUsage::all()),
             voxel_texture_descriptors,
-            linear_sampler,
             skybox_vertex_buffer,
             skybox_index_buffer,
         }
