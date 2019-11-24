@@ -98,7 +98,7 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
         let mut cb = AutoCommandBufferBuilder::primary_one_time_submit(info.device.clone(), info.queue_main.family()).unwrap()
             .begin_render_pass(
                 self.framebuffers.as_ref().unwrap()[info.image_num].clone(), false,
-                vec![ClearValue::None, [0.0, 0.0, 0.0, 1.0].into(), [0.0, 0.0, 0.0, 1.0].into()]).unwrap();
+                vec![ClearValue::None, [0.0, 0.0, 0.0, 1.0].into(), [0,0,0,0].into()]).unwrap();
 
         cb = cb.draw(self.pipeline.clone(), &DynamicState {
             line_width: None,
@@ -114,13 +114,18 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
         },
                              vec![self.fullscreen_vertex_buffer.clone()],
                              descriptor_set, TonemapperShaders::fragment::ty::Constants {
-                                exposure: 1.0,
                                 debug_vis_mode: info.debug_visualize_setting,
-                                screen_dimensions: [info.dimensions[0] as f32, info.dimensions[1] as f32]
+                                _dummy0: [0u8; 4],
+                                screen_dimensions: [info.dimensions[0] as f32, info.dimensions[1] as f32],
+                                exposure_adjustment: info.tonemapping_info.exposure,
+                                vignette_opacity: info.tonemapping_info.vignette_opacity,
                             }).unwrap()
-            .end_render_pass().unwrap();
-            // TODO: luma buffer needs to handle dynamic size
-            //.copy_image_to_buffer(info.luma_buffer_image.clone(), info.reduction_solver.lock().source_buffer.clone()).unwrap();
+            .end_render_pass().unwrap()
+            // render tex -> mips tex
+            .blit_image(info.attachments.luma_render.clone(), [0, 0, 0], [info.dimensions[0] as i32, info.dimensions[1] as i32, 1], 0, 0,
+                        info.attachments.luma_mips.clone(),   [0, 0, 0], [512, 512, 1], 0, 0, 1, Filter::Linear).unwrap()
+
+            .copy_image_to_buffer_dimensions(info.attachments.luma_mips.clone(), info.histogram_compute.lock().source_buffer.clone(), [0, 0, 0], [512, 512, 1], 0, 1, 0).unwrap();
         (cb.build().unwrap(), info.queue_main.clone())
     }
 
@@ -130,7 +135,7 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
                 let arc: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(self.get_renderpass().clone())
                     .add(info.attachments.hdr_color.clone()).unwrap()
                     .add(image.clone()).unwrap()
-                    .add(info.attachments.luma.clone()).unwrap()
+                    .add(info.attachments.luma_render.clone()).unwrap()
                     .build().unwrap());
                 arc
             }).collect::<Vec<_>>());

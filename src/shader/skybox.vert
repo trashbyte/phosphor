@@ -4,20 +4,16 @@
 #extension GL_ARB_shading_language_420pack : enable
 
 layout (location = 0) in vec3 position;
-layout (location = 1) in vec2 uv;
 
-layout (binding = 0) uniform Data {
-	mat4 projection;
-	mat4 view;
-} uniforms;
+layout(location = 0) out vec4 out_color;
 
-layout (location = 0) out vec2 uv_out;
-
-out gl_PerVertex {
-	vec4 gl_Position;
-};
+layout(push_constant) uniform Constants {
+	mat4 matrix;
+	float sun_rotation;
+	float sun_transit;
+} constants;
 
 void main() {
-	uv_out = uv;
-	gl_Position = uniforms.projection * uniforms.view * vec4(position.xyz, 1.0);
+	gl_Position = constants.matrix * vec4(position.xyz, 0.0);
+	out_color = vec4(0.8, 0.9, 1.0, 1.0);
 }

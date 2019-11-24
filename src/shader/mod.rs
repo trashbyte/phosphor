@@ -113,9 +113,9 @@ pub mod occlusion {
 }
 
 
-pub mod reduction {
+pub mod histogram {
     vulkano_shaders::shader!{
         ty: "compute",
-        path: "src/shader/reduce128.comp"
+        path: "src/shader/histogram.comp"
     }
 }

@@ -17,7 +17,7 @@ use cgmath::Deg;
 use winit::Window;
 
 
-pub const OCCLUSION_FRAME_SIZE: [u32; 2] = [192, 144];
+pub const OCCLUSION_FRAME_SIZE: [u32; 2] = [256, 144];
 
 
 pub struct OcclusionRenderPipeline {
@@ -91,7 +91,7 @@ impl RenderPipelineAbstract for OcclusionRenderPipeline {
     }
 
     fn build_command_buffer(&mut self, info: &RenderInfo) -> (AutoCommandBuffer, Arc<Queue>) {
-        let proj = VULKAN_CORRECT_CLIP * cgmath::perspective(Deg(60f32), (OCCLUSION_FRAME_SIZE[0] as f32) / (OCCLUSION_FRAME_SIZE[1] as f32), 0.1, 100.0);
+        let proj = VULKAN_CORRECT_CLIP * cgmath::perspective(Deg(75f32), (OCCLUSION_FRAME_SIZE[0] as f32) / (OCCLUSION_FRAME_SIZE[1] as f32), 0.1, 100.0);
         let lock = info.render_queues.read().unwrap();
 
         let cb = AutoCommandBufferBuilder::primary_one_time_submit(info.device.clone(), info.queue_offscreen.family())

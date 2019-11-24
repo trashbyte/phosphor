@@ -1,4 +1,4 @@
-const float PI = 3.14159265359;
+#include "constants.inc"
 
 vec3 fresnelSchlick(const in float cosTheta, const in vec3 F0) {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);

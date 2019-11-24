@@ -23,6 +23,7 @@ use crate::renderpass::DeferredShadingRenderPass;
 use crate::shader::deferred_shading as DeferredShadingShaders;
 use crate::shader::skybox as SkyboxShaders;
 use crate::buffer::CpuAccessibleBufferXalloc;
+use cgmath::Matrix4;
 
 
 pub struct DeferredShadingRenderPipeline {
@@ -31,13 +32,11 @@ pub struct DeferredShadingRenderPipeline {
     pub framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
     renderpass: Arc<RenderPass<DeferredShadingRenderPass>>,
     voxel_uniform_buffer_pool: XallocCpuBufferPool<DeferredShadingShaders::vertex::ty::InstanceData>,
-    skybox_uniform_buffer_pool: XallocCpuBufferPool<SkyboxShaders::vertex::ty::Data>,
     // TODO: texture bindings per material
     voxel_texture_descriptors: Arc<dyn DescriptorSet + Send + Sync>,
     linear_sampler: Arc<Sampler>,
     skybox_vertex_buffer: Arc<CpuAccessibleBufferXalloc<[VertexPositionUV]>>,
     skybox_index_buffer: Arc<CpuAccessibleBufferXalloc<[u32]>>,
-    skybox_texture: Arc<ImmutableImage<R8G8B8A8Srgb>>,
 }
 
 
@@ -129,21 +128,12 @@ impl DeferredShadingRenderPipeline {
             info.device.clone(), BufferUsage::all(),
             skybox_idxs.iter().cloned()).expect("failed to create buffer");
 
-        let (skybox_texture, _future) = {
-            let path_str = String::from("textures/skybox.png");
-            let image = image::open(Path::new(&path_str)).unwrap().to_rgba();
-            let (w, h) = image.dimensions();
-            let image_data = image.into_raw().clone();
-
-            ImmutableImage::from_iter(image_data.iter().cloned(), Dim2d { width: w, height: h }, R8G8B8A8Srgb, info.queue_main.clone()).unwrap()
-        };
-
         let linear_sampler = Sampler::new(info.device.clone(), Filter::Linear, Filter::Linear, MipmapMode::Linear,
             SamplerAddressMode::Repeat, SamplerAddressMode::Repeat, SamplerAddressMode::Repeat,
             0.0, 4.0, 0.0, 0.0).unwrap();
 
         let voxel_texture_descriptors = Arc::new(PersistentDescriptorSet::start(voxel_shading_pipeline.clone(), 0)
-            .add_sampled_image(info.tex_registry.get("test_albedo").unwrap().clone(), linear_sampler.clone()).unwrap()
+            .add_sampled_image(info.tex_registry.get("grass").unwrap().clone(), linear_sampler.clone()).unwrap()
             .add_sampled_image(info.tex_registry.get("test_normal").unwrap().clone(), linear_sampler.clone()).unwrap()
             .add_sampled_image(info.tex_registry.get("black").unwrap().clone(), linear_sampler.clone()).unwrap()
             .add_sampled_image(info.tex_registry.get("black").unwrap().clone(), linear_sampler.clone()).unwrap()
@@ -156,12 +146,10 @@ impl DeferredShadingRenderPipeline {
             framebuffers: None,
             renderpass,
             voxel_uniform_buffer_pool: XallocCpuBufferPool::<DeferredShadingShaders::vertex::ty::InstanceData>::new(info.device.clone(), BufferUsage::all()),
-            skybox_uniform_buffer_pool: XallocCpuBufferPool::<SkyboxShaders::vertex::ty::Data>::new(info.device.clone(), BufferUsage::all()),
             voxel_texture_descriptors,
             linear_sampler,
             skybox_vertex_buffer,
             skybox_index_buffer,
-            skybox_texture,
         }
     }
 }
@@ -179,17 +167,6 @@ impl RenderPipelineAbstract for DeferredShadingRenderPipeline {
     }
 
     fn build_command_buffer(&mut self, info: &RenderInfo) -> (AutoCommandBuffer, Arc<Queue>) {
-        let skybox_subbuffer = self.skybox_uniform_buffer_pool.next(SkyboxShaders::vertex::ty::Data {
-            projection: info.proj_mat.into(),
-            view: info.view_mat.into()
-        }).unwrap();
-
-        let skybox_descriptor_set = Arc::new(PersistentDescriptorSet::start(self.skybox_pipeline.clone(), 0)
-            .add_buffer(skybox_subbuffer).unwrap()
-            .add_sampled_image(self.skybox_texture.clone(), self.linear_sampler.clone()).unwrap()
-            .build().unwrap()
-        );
-
         let mut voxel_descriptor_sets = Vec::new();
         let lock = info.render_queues.read().unwrap();
         for entry in lock.meshes.iter() {
@@ -222,7 +199,11 @@ impl RenderPipelineAbstract for DeferredShadingRenderPipeline {
                 },
                               vec![self.skybox_vertex_buffer.clone()],
                               self.skybox_index_buffer.clone(),
-                              skybox_descriptor_set, ()).unwrap()
+                              (), SkyboxShaders::vertex::ty::Constants {
+                                matrix: (info.proj_mat.clone() * Matrix4::from(info.camera_transform.rotation)).into(),
+                                sun_rotation: 0.0,
+                                sun_transit: 0.4,
+                            }).unwrap()
             .next_subpass(false).unwrap();
 
         for (i, entry) in lock.meshes.iter().enumerate() {

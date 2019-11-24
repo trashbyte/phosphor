@@ -36,7 +36,7 @@ unsafe impl RenderPassDesc for PostProcessRenderPass {
                 final_layout: ImageLayout::ColorAttachmentOptimal
             }),
             LUMA_BUFFER => Some(AttachmentDescription {
-                format: Format::R16G16B16A16Sfloat,
+                format: Format::R32Sint,
                 samples: 1,
                 load: LoadOp::Clear,
                 store: StoreOp::Store,

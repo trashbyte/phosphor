@@ -3,13 +3,12 @@
 use std::sync::{Arc, RwLock};
 
 use cgmath::{EuclideanSpace, Matrix4, Vector4, SquareMatrix, Deg};
-use parking_lot::Mutex;
 use winit::{Window, WindowBuilder, EventsLoop, MouseCursor};
 use winit::dpi::LogicalSize;
 
 use vulkano::buffer::BufferUsage;
 use vulkano::device::{Device, DeviceExtensions, Queue};
-use vulkano::format::{D32Sfloat, R16G16B16A16Sfloat, R32Uint};
+use vulkano::format::{D32Sfloat, R16G16B16A16Sfloat, R32Uint, R32Sint};
 use vulkano::image::attachment::AttachmentImage;
 use vulkano::image::swapchain::SwapchainImage;
 use vulkano::instance::{Instance, PhysicalDevice};
@@ -26,9 +25,11 @@ use crate::buffer::CpuAccessibleBufferXalloc;
 use crate::geometry::VertexPositionColorAlpha;
 use crate::pipeline::text::TextData;
 use crate::pipeline::occlusion::OCCLUSION_FRAME_SIZE;
-use crate::compute::ParallelReductionSolver;
 use crate::vulkano_win::VkSurfaceBuild;
 use crate::pipeline::imgui::ImguiRenderPipeline;
+use crate::compute::HistogramCompute;
+use std::sync::atomic::Ordering;
+use parking_lot::Mutex;
 
 
 /// Matrix to correct vulkan clipping planes and flip y axis.
@@ -63,6 +64,7 @@ lazy_static! {
         color_attachment: true,
         input_attachment: true,
         transfer_source: true,
+        transfer_destination: true,
         ..ImageUsage::none()
     };
 }
@@ -77,7 +79,8 @@ fn recreate_attachments(device: Arc<Device>, dimensions: [u32; 2], old_occlusion
         metallic: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
         hdr_color: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
         main_depth: AttachmentImage::transient(device.clone(), dimensions, D32Sfloat).unwrap(),
-        luma: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, LUMA_BUFFER_USAGE.clone()).unwrap(),
+        luma_render: AttachmentImage::with_usage(device.clone(), dimensions, R32Sint, LUMA_BUFFER_USAGE.clone()).unwrap(),
+        luma_mips: AttachmentImage::with_usage(device.clone(), [512, 512], R32Sint, LUMA_BUFFER_USAGE.clone()).unwrap(),
         occlusion: old_occlusion
     }
 }
@@ -100,7 +103,8 @@ pub struct RendererAttachments {
     pub metallic: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
     pub hdr_color: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
     pub main_depth: Arc<AttachmentImage<D32Sfloat>>,
-    pub luma: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub luma_render: Arc<AttachmentImage<R32Sint>>,
+    pub luma_mips: Arc<AttachmentImage<R32Sint>>,
     pub occlusion: Option<Arc<AttachmentImage<R32Uint>>>
 }
 
@@ -120,10 +124,11 @@ pub struct RenderInfo {
     pub view_mat: Matrix4<f32>,
     pub proj_mat: Matrix4<f32>,
     pub fov: Deg<f32>,
-    pub exposure: f32,
+    pub tonemapping_info: TonemappingInfo,
+    pub luma_avg_buffer: Arc<CpuAccessibleBufferXalloc<[u16]>>,
+    pub histogram_compute: Arc<Mutex<HistogramCompute>>,
 
     pub tex_registry: Arc<TextureRegistry>,
-    pub reduction_solver: Arc<Mutex<ParallelReductionSolver>>,
 
     pub attachments: RendererAttachments,
 
@@ -141,6 +146,37 @@ pub enum GestaltRenderPass {
     Lines            = 4,
     Text             = 5,
     Imgui            = 6,
+}
+
+
+#[derive(Clone)]
+pub struct TonemappingInfo {
+    pub adjust_speed: f32,
+    pub hist_low_percentile_bin: f32,
+    pub hist_high_percentile_bin: f32,
+    pub avg_scene_luma: f32,
+    pub scene_ev100: f32,
+    pub exposure: f32,
+    pub exposure_adjustment: f32,
+    pub min_exposure: f32,
+    pub max_exposure: f32,
+    pub vignette_opacity: f32
+}
+impl Default for TonemappingInfo {
+    fn default() -> Self {
+        Self {
+            adjust_speed: 0.5,
+            hist_low_percentile_bin: 0.0,
+            hist_high_percentile_bin: 127.0,
+            avg_scene_luma: 1.0,
+            scene_ev100: 0.0,
+            exposure: 0.5,
+            min_exposure: 0.001,
+            max_exposure: 3.0,
+            exposure_adjustment: 0.0,
+            vignette_opacity: 0.1
+        }
+    }
 }
 
 
@@ -248,7 +284,8 @@ impl Renderer {
         let occlusion_vg = Arc::new(VertexGroup::new(Vec::<VertexPositionObjectId>::new().iter().cloned(), Vec::new().iter().cloned(), 0, device.clone()));
         let occlusion_cpu_buffer = CpuAccessibleBufferXalloc::<[u32]>::from_iter(device.clone(), BufferUsage::all(), vec![0u32; 320*240].iter().cloned()).expect("failed to create buffer");
 
-        let reduction_solver = Arc::new(Mutex::new(ParallelReductionSolver::new(device.clone())));
+        let luma_avg_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), BufferUsage::transfer_destination(), [0u16; 4].iter().cloned()).unwrap();
+        let histogram_compute = Arc::new(Mutex::new(HistogramCompute::new(device.clone())));
 
         let mut info = RenderInfo {
             device,
@@ -258,9 +295,10 @@ impl Renderer {
             view_mat: Matrix4::identity(),
             proj_mat: Matrix4::identity(),
             fov: Deg(45f32),
-            exposure: 1.0,
+            tonemapping_info: TonemappingInfo::default(),
+            luma_avg_buffer,
+            histogram_compute,
             tex_registry: tex_registry.clone(),
-            reduction_solver,
             queue_main,
             queue_offscreen,
             queue_compute,
@@ -311,7 +349,7 @@ impl Renderer {
     }
 
     /// Draw all objects in the render queue. Called every frame in the game loop.
-    pub fn draw(&mut self, camera: &Camera, transform: Transform) -> Result<SwapchainAcquireFuture<Window>, RendererDrawError> {
+    pub fn draw(&mut self, camera: &Camera, dt: f32, transform: Transform) -> Result<SwapchainAcquireFuture<Window>, RendererDrawError> {
         self.info.dimensions = match self.surface.window().get_inner_size() {
             Some(logical_size) => [logical_size.width as u32, logical_size.height as u32],
             None => [800, 600]
@@ -352,6 +390,13 @@ impl Renderer {
             self.recreate_swapchain = false;
         }
 
+        if !crate::compute::HISTOGRAM_COMPUTE_WORKING.load(Ordering::Relaxed) {
+            self.info.histogram_compute.lock().submit(self.info.device.clone(), self.info.queue_compute.clone());
+        }
+        else {
+            println!("histogram compute busy, skipping this frame");
+        }
+
         for p in self.pipelines.iter_mut() {
             p.recreate_framebuffers_if_none(&self.images, &self.info);
         }
@@ -372,33 +417,36 @@ impl Renderer {
 
         self.info.fov = camera.fov.clone();
         self.info.camera_transform = transform.clone();
+        let tonemap_info = self.info.tonemapping_info.clone();
 
-        let avg;
+        let low_bin;
+        let high_bin;
         {
-            avg = *self.info.reduction_solver.lock().avg.lock();
+            let hist_lock = self.info.histogram_compute.lock();
+            low_bin = hist_lock.low_percentile_bin;
+            high_bin = hist_lock.high_percentile_bin;
         }
-//        self.info.render_queues.write().unwrap().text.push(TextData {
-//            text: format!("{:>+2.6}", avg),
-//            position: (5, 200),
-//            family: "Fira Mono".to_string(),
-//            ..TextData::default()
-//        });
-        self.info.exposure -= avg;
 
-//        match crate::compute::REDUCTION_SOLVER_WORKING.load(Ordering::Relaxed) {
-//            true => {
-//                // solver still working, skip this frame
-//                warn!(Renderer, "skipping luma reduction compute this frame");
-//            },
-//            false => {
-//                let solver_arc = self.info.reduction_solver.clone();
-//                let device_arc = self.info.device.clone();
-//                let queue_arc = self.info.queue_compute.clone();
-//                std::thread::spawn(move || {
-//                    solver_arc.lock().submit(device_arc, queue_arc);
-//                });
-//            }
-//        }
+        let bin_avg = (low_bin + high_bin) / 2.0;
+        let avg_log_luma = bin_avg / 4.6 - 10.0;
+        let avg_luma = 2f32.powf(avg_log_luma);
+        let ev100 = (avg_luma * 100.0 / 12.5).log2() + tonemap_info.exposure_adjustment;
+        let max_luma = 1.2 * 2f32.powf(ev100);
+        let exposure = 1.0 / max_luma;
+        let exposure = exposure.max(tonemap_info.min_exposure);
+
+        self.info.tonemapping_info = TonemappingInfo {
+            adjust_speed: 0.5,
+            hist_low_percentile_bin: low_bin,
+            hist_high_percentile_bin: high_bin,
+            avg_scene_luma: avg_luma,
+            scene_ev100: ev100,
+            exposure: 0.75, // FIXME: auto exposure disabled
+            exposure_adjustment: tonemap_info.exposure_adjustment,
+            min_exposure: tonemap_info.min_exposure,
+            max_exposure: tonemap_info.max_exposure,
+            vignette_opacity: tonemap_info.vignette_opacity
+        };
 
         Ok(future)
     }

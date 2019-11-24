@@ -14,7 +14,7 @@ layout(push_constant) uniform Constants {
     uint debug_vis_mode;
 } constants;
 
-#include "bsdf.inc"
+#include "lights.inc"
 #include "debug_vis.inc"
 
 void main() {
@@ -34,48 +34,20 @@ void main() {
     vec3 N = subpassLoad(gbufferNormal).rgb;
     vec3 V = normalize(constants.view_pos - frag_pos);
     vec3 albedo = subpassLoad(gbufferAlbedo).rgb;
-    float roughness = subpassLoad(gbufferRoughness).r;
+    float roughness = 0.9;//subpassLoad(gbufferRoughness).r;
     float metallic = subpassLoad(gbufferMetallic).r;
 
     // summing irradiance for all lights
     vec3 Lo = vec3(0.0);
     for(int i = 0; i < 3; ++i) {
-        vec3 L = normalize(light_positions[i] - frag_pos);
-        vec3 H = normalize(V + L);
-
-        float distance = length(light_positions[i] - frag_pos);
-        float attenuation = 1.0 / (distance * distance);
-        vec3 radiance = light_colors[i] * attenuation;
-
-        // F: Cook-Torrance specular term
-        vec3 F0 = vec3(0.04);
-        F0 = mix(F0, albedo, metallic);
-        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-        // NDF: Normal distribution function (Trowbridge-Reitz GGX)
-        float NDF = DistributionGGX(N, H, roughness);
-
-        // G: Geometry function (Schlick-GGX)
-        float G = GeometrySmith(N, V, L, roughness);
-
-        // ratio of refraction
-        vec3 kS = F;
-        vec3 kD = vec3(1.0) - kS;
-        // metallic surfaces don't refract
-        kD *= 1.0 - metallic;
-
-        // calculating final Cook-Torrance BRDF value
-        vec3 numerator = NDF * G * F;
-        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
-        vec3 specular = numerator / max(denominator, 0.001);
-
-        float NdotL = max(dot(N, L), 0.0);
-        // final radiance value
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+        Lo += point_light(light_positions[i], light_colors[i], N, V, albedo, roughness, metallic, frag_pos);
     }
+    Lo += directional_light(normalize(vec3(0.5, -1.0, 0.5)), vec3(1.0, 1.0, 0.9) * 5.0, N, V, albedo, roughness, metallic, frag_pos);
 
-    vec3 ambient = vec3(0.03) * albedo; // * ao;
-    vec3 color = ambient + Lo;
+    //vec3 hemi = hemisphere_light(N, vec3(0.0,1.0,0.0), vec3(0.9,0.9,1.0), vec3(0.0,0.0,0.0));
+    vec3 color = Lo + (albedo * 0.1);
+    // absolute luminance to pipeline luminance
+    color = color / INTERNAL_HDR_DIV;
 
     if (constants.debug_vis_mode == DEBUG_VISUALIZE_POSITION_BUFFER) {
         f_color = vec4(frag_pos / 100.0, 1.0);
