@@ -1,11 +1,9 @@
 #version 450
 
-#extension GL_ARB_separate_shader_objects : enable
-#extension GL_ARB_shading_language_420pack : enable
-
 layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 uv;
 
-layout(location = 0) out vec4 out_color;
+layout(location = 0) out vec2 out_uv;
 
 layout(push_constant) uniform Constants {
 	mat4 matrix;
@@ -15,5 +13,5 @@ layout(push_constant) uniform Constants {
 
 void main() {
 	gl_Position = constants.matrix * vec4(position.xyz, 0.0);
-	out_color = vec4(0.8, 0.9, 1.0, 1.0);
+	out_uv = vec2( uv.x, -abs(uv.y - 0.5) + 0.5 );
 }

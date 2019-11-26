@@ -171,7 +171,7 @@ impl Default for TonemappingInfo {
             avg_scene_luma: 1.0,
             scene_ev100: 0.0,
             exposure: 0.5,
-            min_exposure: 0.001,
+            min_exposure: 0.1,
             max_exposure: 3.0,
             exposure_adjustment: 0.0,
             vignette_opacity: 0.1
@@ -431,9 +431,9 @@ impl Renderer {
         let avg_log_luma = bin_avg / 4.6 - 10.0;
         let avg_luma = 2f32.powf(avg_log_luma);
         let ev100 = (avg_luma * 100.0 / 12.5).log2() + tonemap_info.exposure_adjustment;
-        let max_luma = 1.2 * 2f32.powf(ev100);
-        let exposure = 1.0 / max_luma;
-        let _exposure = exposure.max(tonemap_info.min_exposure);
+        let _max_luma = 1.2 * 2f32.powf(ev100);
+        let exposure = 0.1f32;
+        let exposure = exposure.max(tonemap_info.min_exposure);
 
         self.info.tonemapping_info = TonemappingInfo {
             adjust_speed: 0.5,
@@ -441,7 +441,7 @@ impl Renderer {
             hist_high_percentile_bin: high_bin,
             avg_scene_luma: avg_luma,
             scene_ev100: ev100,
-            exposure: 0.75, // FIXME: auto exposure disabled
+            exposure,
             exposure_adjustment: tonemap_info.exposure_adjustment,
             min_exposure: tonemap_info.min_exposure,
             max_exposure: tonemap_info.max_exposure,

@@ -21,6 +21,7 @@ use crate::shader::deferred_shading as DeferredShadingShaders;
 use crate::shader::skybox as SkyboxShaders;
 use crate::buffer::CpuAccessibleBufferXalloc;
 use cgmath::Matrix4;
+use std::path::Path;
 
 
 pub struct DeferredShadingRenderPipeline {
@@ -77,52 +78,44 @@ impl DeferredShadingRenderPipeline {
                 .unwrap())
         };
 
-        const SKYBOX_SIZE: f32 = 5000.0;
-        let skybox_verts = vec![
-            VertexPositionUV { position: [  SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.3333, 0.5 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.6666, 0.5 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.6666, 0.0 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.3333, 0.0 ] },
+        let (meshes, _) = tobj::load_obj(&Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SkySphere.obj"))).unwrap();
+        let skybox_mesh = &meshes[0].mesh;
+        #[allow(unused_assignments)]
+        let (mut u, mut v) = (0f32, 0f32);
+        let mut skybox_uvs = Vec::new();
+        for (i, uv) in skybox_mesh.texcoords.iter().enumerate() {
+            match i % 2 {
+                0 => { u = *uv; },
+                1 => {
+                    v = *uv;
+                    skybox_uvs.push([ u, v ]);
+                },
+                _ => unreachable!()
+            }
+        }
+        skybox_uvs.reverse();
+        let mut skybox_verts = Vec::new();
+        #[allow(unused_assignments)]
+        let (mut x, mut y, mut z) = (0f32, 0f32, 0f32);
+        for (i, p) in skybox_mesh.positions.iter().enumerate() {
+            match i % 3 {
+                0 => { x = *p; },
+                1 => { y = *p; },
+                2 => {
+                    z = *p;
+                    let uv =skybox_uvs.pop().unwrap();
+                    skybox_verts.push(VertexPositionUV { position: [ x, y, z ], uv: [ uv[0], uv[1] ] });
+                },
+                _ => unreachable!()
+            }
+        }
 
-            VertexPositionUV { position: [  SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 1.0000, 0.5 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.6666, 0.5 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.6666, 0.0 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 1.0000, 0.0 ] },
-
-            VertexPositionUV { position: [ -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.3335, 1.0 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.6663, 1.0 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.6663, 0.5 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.3335, 0.5 ] },
-
-            VertexPositionUV { position: [ -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.3333, 0.5 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.0000, 0.5 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.0000, 0.0 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.3333, 0.0 ] },
-
-            VertexPositionUV { position: [  SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.668, 0.502 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.998, 0.502 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.998, 0.998 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.668, 0.998 ] },
-
-            VertexPositionUV { position: [ -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.332, 0.998 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE ], uv: [ 0.001, 0.998 ] },
-            VertexPositionUV { position: [  SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.001, 0.502 ] },
-            VertexPositionUV { position: [ -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE ], uv: [ 0.332, 0.502 ] },
-        ];
-        let skybox_idxs = vec![
-            0, 1, 2, 2, 3, 0,
-            4, 5, 6, 6, 7, 4,
-            8, 9, 10, 10, 11, 8,
-            12, 13, 14, 14, 15, 12,
-            16, 17, 18, 18, 19, 16,
-            20, 21, 22, 22, 23, 20
-        ];
         let skybox_vertex_buffer = CpuAccessibleBufferXalloc::<[VertexPositionUV]>::from_iter(
             info.device.clone(), BufferUsage::all(),
             skybox_verts.iter().cloned()).expect("failed to create buffer");
         let skybox_index_buffer = CpuAccessibleBufferXalloc::<[u32]>::from_iter(
             info.device.clone(), BufferUsage::all(),
-            skybox_idxs.iter().cloned()).expect("failed to create buffer");
+            skybox_mesh.indices.iter().cloned()).expect("failed to create buffer");
 
         let linear_sampler = Sampler::new(info.device.clone(), Filter::Linear, Filter::Linear, MipmapMode::Linear,
             SamplerAddressMode::Repeat, SamplerAddressMode::Repeat, SamplerAddressMode::Repeat,

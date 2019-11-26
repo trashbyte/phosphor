@@ -21,6 +21,7 @@ winit = "0.19.4"
 vulkano = "0.16.0"
 xalloc = "0.2.6"
 half = "1.4.0"
+tobj = "0.1.11"
 
 # custom version with docking
 imgui = { path = "../imgui-rs" }

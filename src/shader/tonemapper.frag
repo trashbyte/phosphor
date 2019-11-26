@@ -13,22 +13,20 @@ layout(push_constant) uniform Constants {
     float vignette_opacity;
 } constants;
 
-const float E = 2.71828;
-
 #include "constants.inc"
 #include "debug_vis.inc"
 
 void main() {
     // pipeline luminance to absolute luminance
     vec3 hdrColor = subpassLoad(inputColor).rgb * INTERNAL_HDR_DIV;
-    float fragment_luma = dot(hdrColor, vec3(0.2126, 0.7152, 0.0722));
+    float fragment_luma = dot(hdrColor, LUMA_COMPONENTS);
 
     vec2 center = vec2(constants.screen_dimensions[0] / 2, constants.screen_dimensions[1] / 2);
     vec2 distance = abs(gl_FragCoord.xy - center) / center;
     float vignette_amount = smoothstep(0.0, 1.0, length(distance * 0.707));
     float vignette = 1.0 - (vignette_amount * constants.vignette_opacity);
 
-    vec3 tonemapped = hdrColor * constants.exposure_adjustment * vignette;
+    vec3 tonemapped = hdrColor * 1.0 /*constants.exposure_adjustment*/ * vignette;
     f_color = vec4(tonemapped, 1.0);
 
     if (constants.debug_vis_mode != 0) {
@@ -48,8 +46,7 @@ void main() {
     }
 
     if (gl_FragCoord.z < 1000.0) {
-        // pipeline luminance to absolute luminance
-        luma_out = fragment_luma * INTERNAL_HDR_DIV;
+        luma_out = fragment_luma;
     }
     else {
         luma_out = -1.0;

@@ -18,6 +18,7 @@ extern crate rusttype;
 extern crate vulkano_shaders;
 extern crate winit;
 extern crate xalloc;
+extern crate tobj;
 
 // modules
 
