@@ -1,7 +1,11 @@
 #include "constants.inc"
 
-vec3 fresnelSchlick(const in float cosTheta, const in vec3 F0) {
+vec3 FresnelSchlick(const in float cosTheta, const in vec3 F0) {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+vec3 FresnelSchlickRoughness(const in float cosTheta, const in vec3 F0, const in float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
 // Trowbridge-Reitz GGX normal distribution function

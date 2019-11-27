@@ -17,7 +17,7 @@ lazy_static! {
 
 pub struct HistogramCompute {
     pub pipeline: Arc<dyn ComputePipelineAbstract + Send + Sync>,
-    pub source_buffer: Arc<CpuAccessibleBufferXalloc<[u16]>>,
+    pub source_buffer: Arc<CpuAccessibleBufferXalloc<[u32]>>,
     pub bins_buffer: Arc<CpuAccessibleBufferXalloc<[u32]>>,
     pub desc_set: Arc<dyn DescriptorSet + Send + Sync>,
     pub bins: [u32; 128],
@@ -39,7 +39,7 @@ impl HistogramCompute {
             ..BufferUsage::none()
         };
 
-        let source_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(),  storage_buf_usage.clone(), [0u16; 512*512*4].iter().cloned()).unwrap();
+        let source_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(),  storage_buf_usage.clone(), [0u32; 512*512].iter().cloned()).unwrap();
         let bins_buffer = CpuAccessibleBufferXalloc::from_iter(device.clone(), storage_buf_usage.clone(), [0u32; 128].iter().cloned()).unwrap();
 
         let desc_set = Arc::new(PersistentDescriptorSet::start(pipeline.clone(), 0)

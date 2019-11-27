@@ -5,7 +5,7 @@
 layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
 
 layout(binding = 0) buffer InData {
-    float data[];
+    uint data[];
 } in_data;
 layout(binding = 1) buffer OutData {
     uint bins[];
@@ -15,9 +15,11 @@ void main() {
     float sum = 0.0;
     uint local_offset = gl_GlobalInvocationID.x * 1024;
     for (int i = 0; i < 1024; ++i) {
+        // dividing to correct uint conversion offset
         float lum = in_data.data[i + local_offset];
+        lum /= 1000.0;
         lum = log2(lum);
-        if (!isnan(lum) && !isinf(lum) && lum >= 0.0) {
+        if (!isnan(lum) && !isinf(lum)) {
             int bin = int(floor((lum+10.0)*4.6));
             bin = clamp(bin, 0, 127);
             atomicAdd(out_data.bins[bin], 1);

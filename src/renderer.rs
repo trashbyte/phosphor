@@ -48,10 +48,11 @@ pub const DEBUG_VISUALIZE_NORMAL_BUFFER: u32 = 2;
 pub const DEBUG_VISUALIZE_ALBEDO_BUFFER: u32 = 3;
 pub const DEBUG_VISUALIZE_ROUGHNESS_BUFFER: u32 = 4;
 pub const DEBUG_VISUALIZE_METALLIC_BUFFER: u32 = 5;
-pub const DEBUG_VISUALIZE_DEFERRED_LIGHTING_ONLY: u32 = 6;
-pub const DEBUG_VISUALIZE_NO_POST_PROCESSING: u32 = 7;
-pub const DEBUG_VISUALIZE_OCCLUSION_BUFFER: u32 = 8;
-pub const DEBUG_VISUALIZE_MAX: u32 = 9;
+pub const DEBUG_VISUALIZE_DIFFUSE_LIGHTING_ONLY: u32 = 6;
+pub const DEBUG_VISUALIZE_SPECULAR_LIGHTING_ONLY: u32 = 7;
+pub const DEBUG_VISUALIZE_NO_POST_PROCESSING: u32 = 8;
+pub const DEBUG_VISUALIZE_OCCLUSION_BUFFER: u32 = 9;
+pub const DEBUG_VISUALIZE_MAX: u32 = 10;
 
 
 lazy_static! {
@@ -72,15 +73,17 @@ lazy_static! {
 
 fn recreate_attachments(device: Arc<Device>, dimensions: [u32; 2], old_occlusion: Option<Arc<AttachmentImage<R32Uint>>>) -> RendererAttachments {
     RendererAttachments {
-        position: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
-        normal: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
-        albedo: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
-        roughness: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
-        metallic: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
-        hdr_color: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
-        main_depth: AttachmentImage::transient(device.clone(), dimensions, D32Sfloat).unwrap(),
-        luma_render: AttachmentImage::with_usage(device.clone(), dimensions, R32Sint, LUMA_BUFFER_USAGE.clone()).unwrap(),
-        luma_mips: AttachmentImage::with_usage(device.clone(), [512, 512], R32Sint, LUMA_BUFFER_USAGE.clone()).unwrap(),
+        position:     AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        normal:       AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        albedo:       AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        roughness:    AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        metallic:     AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        hdr_diffuse:  AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        hdr_specular: AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        scene_color:  AttachmentImage::with_usage(device.clone(), dimensions, R16G16B16A16Sfloat, GBUFFER_USAGE.clone()).unwrap(),
+        main_depth:   AttachmentImage::transient(device.clone(), dimensions, D32Sfloat).unwrap(),
+        luma_render:  AttachmentImage::with_usage(device.clone(), dimensions, R32Sint, LUMA_BUFFER_USAGE.clone()).unwrap(),
+        luma_mips:    AttachmentImage::with_usage(device.clone(), [512, 512], R32Sint, LUMA_BUFFER_USAGE.clone()).unwrap(),
         occlusion: old_occlusion
     }
 }
@@ -101,7 +104,9 @@ pub struct RendererAttachments {
     pub albedo: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
     pub roughness: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
     pub metallic: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
-    pub hdr_color: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub hdr_diffuse: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub hdr_specular: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
+    pub scene_color: Arc<AttachmentImage<R16G16B16A16Sfloat>>,
     pub main_depth: Arc<AttachmentImage<D32Sfloat>>,
     pub luma_render: Arc<AttachmentImage<R32Sint>>,
     pub luma_mips: Arc<AttachmentImage<R32Sint>>,
@@ -174,7 +179,7 @@ impl Default for TonemappingInfo {
             min_exposure: 0.1,
             max_exposure: 3.0,
             exposure_adjustment: 0.0,
-            vignette_opacity: 0.1
+            vignette_opacity: 0.2
         }
     }
 }
@@ -431,9 +436,9 @@ impl Renderer {
         let avg_log_luma = bin_avg / 4.6 - 10.0;
         let avg_luma = 2f32.powf(avg_log_luma);
         let ev100 = (avg_luma * 100.0 / 12.5).log2() + tonemap_info.exposure_adjustment;
-        let _max_luma = 1.2 * 2f32.powf(ev100);
-        let exposure = 0.1f32;
-        let exposure = exposure.max(tonemap_info.min_exposure);
+        let max_luma = 1.2 * 2f32.powf(ev100);
+        let exposure = 1.0 / max_luma;
+        //let exposure = exposure.max(tonemap_info.min_exposure);
 
         self.info.tonemapping_info = TonemappingInfo {
             adjust_speed: 0.5,

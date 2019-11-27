@@ -40,9 +40,9 @@ void main() {
     // flip green channel
     ts_normal = vec3(ts_normal.x, -ts_normal.y, ts_normal.z);
     vec3 binormal = cross(ws_normal, tangent);
-    gbuffer_normal = vec4(normalize(tangent * ts_normal.x + binormal * ts_normal.y + ws_normal * ts_normal.z), 1.0);
+    gbuffer_normal = vec4(ws_normal, 1.0);//vec4(normalize(tangent * ts_normal.x + binormal * ts_normal.y + ws_normal * ts_normal.z), 1.0);
 
     gbuffer_albedo = texture(tex_albedo, uv);
-    gbuffer_roughness = vec4(0.2);//texture(tex_roughness, uv).x;
+    gbuffer_roughness = vec4(texture(tex_roughness, uv).x);
     gbuffer_metallic = vec4(texture(tex_metal, uv).x);
 }

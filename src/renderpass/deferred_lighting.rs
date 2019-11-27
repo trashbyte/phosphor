@@ -9,7 +9,8 @@ const NORMAL_BUFFER:    usize = 1;
 const ALBEDO_BUFFER:    usize = 2;
 const ROUGHNESS_BUFFER: usize = 3;
 const METALLIC_BUFFER:  usize = 4;
-const HDR_COLOR_BUFFER: usize = 5;
+const DIFFUSE_OUT:      usize = 5;
+const SPECULAR_OUT:     usize = 6;
 
 const FLOAT_ATTACHMENT_DESC: AttachmentDescription = AttachmentDescription {
     format: Format::R16G16B16A16Sfloat,
@@ -21,9 +22,19 @@ const FLOAT_ATTACHMENT_DESC: AttachmentDescription = AttachmentDescription {
     initial_layout: ImageLayout::ShaderReadOnlyOptimal,
     final_layout: ImageLayout::ShaderReadOnlyOptimal
 };
+const FLOAT_OUTPUT_DESC: AttachmentDescription = AttachmentDescription {
+    format: Format::R16G16B16A16Sfloat,
+    samples: 1,
+    load: LoadOp::Clear,
+    store: StoreOp::Store,
+    stencil_load: LoadOp::DontCare,
+    stencil_store: StoreOp::DontCare,
+    initial_layout: ImageLayout::ColorAttachmentOptimal,
+    final_layout: ImageLayout::ColorAttachmentOptimal
+};
 
 unsafe impl RenderPassDesc for DeferredLightingRenderPass {
-    fn num_attachments(&self) -> usize { 6 }
+    fn num_attachments(&self) -> usize { 7 }
     fn attachment_desc(&self, num: usize) -> Option<AttachmentDescription> {
         match num {
             POSITION_BUFFER => Some(FLOAT_ATTACHMENT_DESC),
@@ -31,16 +42,8 @@ unsafe impl RenderPassDesc for DeferredLightingRenderPass {
             ALBEDO_BUFFER => Some(FLOAT_ATTACHMENT_DESC),
             ROUGHNESS_BUFFER => Some(FLOAT_ATTACHMENT_DESC),
             METALLIC_BUFFER => Some(FLOAT_ATTACHMENT_DESC),
-            HDR_COLOR_BUFFER => Some(AttachmentDescription {
-                format: Format::R16G16B16A16Sfloat,
-                samples: 1,
-                load: LoadOp::Clear,
-                store: StoreOp::Store,
-                stencil_load: LoadOp::DontCare,
-                stencil_store: StoreOp::DontCare,
-                initial_layout: ImageLayout::ColorAttachmentOptimal,
-                final_layout: ImageLayout::ColorAttachmentOptimal
-            }),
+            DIFFUSE_OUT => Some(FLOAT_OUTPUT_DESC),
+            SPECULAR_OUT => Some(FLOAT_OUTPUT_DESC),
             _ => None
         }
     }
@@ -49,7 +52,10 @@ unsafe impl RenderPassDesc for DeferredLightingRenderPass {
     fn subpass_desc(&self, num: usize) -> Option<PassDescription> {
         match num {
             0 =>  Some(PassDescription {
-                color_attachments: vec![ (HDR_COLOR_BUFFER, ImageLayout::ColorAttachmentOptimal) ],
+                color_attachments: vec![
+                    (DIFFUSE_OUT, ImageLayout::ColorAttachmentOptimal),
+                    (SPECULAR_OUT, ImageLayout::ColorAttachmentOptimal)
+                ],
                 depth_stencil: None,
                 input_attachments: vec![
                     (POSITION_BUFFER, ImageLayout::ShaderReadOnlyOptimal),

@@ -7,25 +7,42 @@ use vulkano::sync::{PipelineStages, AccessFlagBits};
 /// Render pass for post processing.
 pub struct PostProcessRenderPass;
 
-const HDR_BUFFER:    usize = 0;
-const OUTPUT_BUFFER: usize = 1;
-const LUMA_BUFFER:   usize = 2;
+const POSITION_BUFFER:  usize = 0;
+const NORMAL_BUFFER:    usize = 1;
+const ALBEDO_BUFFER:    usize = 2;
+const ROUGHNESS_BUFFER: usize = 3;
+const METALLIC_BUFFER:  usize = 4;
+
+const DIFFUSE_IN:  usize = 5;
+const SPECULAR_IN: usize = 6;
+
+const SWAPCHAIN_OUT: usize = 7;
+const SCENE_COLOR:   usize = 8;
+const LUMA_BUFFER:   usize = 9;
+
+const FLOAT_INPUT: AttachmentDescription = AttachmentDescription {
+    format: Format::R16G16B16A16Sfloat,
+    samples: 1,
+    load: LoadOp::Load,
+    store: StoreOp::DontCare,
+    stencil_load: LoadOp::DontCare,
+    stencil_store: StoreOp::DontCare,
+    initial_layout: ImageLayout::Undefined,
+    final_layout: ImageLayout::ColorAttachmentOptimal
+};
 
 unsafe impl RenderPassDesc for PostProcessRenderPass {
-    fn num_attachments(&self) -> usize { 3 }
+    fn num_attachments(&self) -> usize { 10 }
     fn attachment_desc(&self, num: usize) -> Option<AttachmentDescription> {
         match num {
-            HDR_BUFFER => Some(AttachmentDescription {
-                format: Format::R16G16B16A16Sfloat,
-                samples: 1,
-                load: LoadOp::Load,
-                store: StoreOp::DontCare,
-                stencil_load: LoadOp::DontCare,
-                stencil_store: StoreOp::DontCare,
-                initial_layout: ImageLayout::ColorAttachmentOptimal,
-                final_layout: ImageLayout::ColorAttachmentOptimal
-            }),
-            OUTPUT_BUFFER => Some(AttachmentDescription {
+            POSITION_BUFFER => Some(FLOAT_INPUT),
+            NORMAL_BUFFER => Some(FLOAT_INPUT),
+            ALBEDO_BUFFER => Some(FLOAT_INPUT),
+            ROUGHNESS_BUFFER => Some(FLOAT_INPUT),
+            METALLIC_BUFFER => Some(FLOAT_INPUT),
+            DIFFUSE_IN => Some(FLOAT_INPUT),
+            SPECULAR_IN => Some(FLOAT_INPUT),
+            SWAPCHAIN_OUT => Some(AttachmentDescription {
                 format: Format::B8G8R8A8Srgb,
                 samples: 1,
                 load: LoadOp::Clear,
@@ -33,6 +50,16 @@ unsafe impl RenderPassDesc for PostProcessRenderPass {
                 stencil_load: LoadOp::DontCare,
                 stencil_store: StoreOp::DontCare,
                 initial_layout: ImageLayout::Undefined,
+                final_layout: ImageLayout::ColorAttachmentOptimal
+            }),
+            SCENE_COLOR => Some(AttachmentDescription {
+                format: Format::R16G16B16A16Sfloat,
+                samples: 1,
+                load: LoadOp::Clear,
+                store: StoreOp::Store,
+                stencil_load: LoadOp::DontCare,
+                stencil_store: StoreOp::DontCare,
+                initial_layout: ImageLayout::ColorAttachmentOptimal,
                 final_layout: ImageLayout::ColorAttachmentOptimal
             }),
             LUMA_BUFFER => Some(AttachmentDescription {
@@ -54,11 +81,15 @@ unsafe impl RenderPassDesc for PostProcessRenderPass {
         match num {
             0 => Some(PassDescription {
                 color_attachments: vec![
-                    (OUTPUT_BUFFER, ImageLayout::ColorAttachmentOptimal),
+                    (SWAPCHAIN_OUT, ImageLayout::ColorAttachmentOptimal),
+                    (SCENE_COLOR, ImageLayout::ColorAttachmentOptimal),
                     (LUMA_BUFFER, ImageLayout::ColorAttachmentOptimal)
                 ],
                 depth_stencil: None,
-                input_attachments: vec![ (HDR_BUFFER, ImageLayout::ColorAttachmentOptimal) ],
+                input_attachments: vec![
+                    (DIFFUSE_IN, ImageLayout::ColorAttachmentOptimal),
+                    (SPECULAR_IN, ImageLayout::ColorAttachmentOptimal)
+                ],
                 resolve_attachments: vec![],
                 preserve_attachments: vec![]
             }),

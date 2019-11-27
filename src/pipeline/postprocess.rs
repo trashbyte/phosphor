@@ -90,7 +90,13 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
 
     fn build_command_buffer(&mut self, info: &RenderInfo) -> (AutoCommandBuffer, Arc<Queue>) {
         let descriptor_set = Arc::new(PersistentDescriptorSet::start(self.pipeline.clone(), 0)
-            .add_image(info.attachments.hdr_color.clone()).unwrap()
+            .add_image(info.attachments.position.clone()).unwrap()
+            .add_image(info.attachments.normal.clone()).unwrap()
+            .add_image(info.attachments.albedo.clone()).unwrap()
+            .add_image(info.attachments.roughness.clone()).unwrap()
+            .add_image(info.attachments.metallic.clone()).unwrap()
+            .add_image(info.attachments.hdr_diffuse.clone()).unwrap()
+            .add_image(info.attachments.hdr_specular.clone()).unwrap()
             .add_sampled_image(info.attachments.occlusion.as_ref().unwrap().clone(), self.occlusion_buf_sampler.clone()).unwrap()
             .build().unwrap()
         );
@@ -98,7 +104,7 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
         let mut cb = AutoCommandBufferBuilder::primary_one_time_submit(info.device.clone(), info.queue_main.family()).unwrap()
             .begin_render_pass(
                 self.framebuffers.as_ref().unwrap()[info.image_num].clone(), false,
-                vec![ClearValue::None, [0.0, 0.0, 0.0, 1.0].into(), [0,0,0,0].into()]).unwrap();
+                vec![ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, [0.0, 0.0, 0.0, 1.0].into(), [0.0, 0.0, 0.0, 1.0].into(), [0,0,0,0].into() ]).unwrap();
 
         cb = cb.draw(self.pipeline.clone(), &DynamicState {
             line_width: None,
@@ -133,8 +139,15 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
         if self.get_framebuffers_mut().is_none() {
             let new_framebuffers = Some(images.iter().map(|image| {
                 let arc: Arc<dyn FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(self.get_renderpass().clone())
-                    .add(info.attachments.hdr_color.clone()).unwrap()
+                    .add(info.attachments.position.clone()).unwrap()
+                    .add(info.attachments.normal.clone()).unwrap()
+                    .add(info.attachments.albedo.clone()).unwrap()
+                    .add(info.attachments.roughness.clone()).unwrap()
+                    .add(info.attachments.metallic.clone()).unwrap()
+                    .add(info.attachments.hdr_diffuse.clone()).unwrap()
+                    .add(info.attachments.hdr_specular.clone()).unwrap()
                     .add(image.clone()).unwrap()
+                    .add(info.attachments.scene_color.clone()).unwrap()
                     .add(info.attachments.luma_render.clone()).unwrap()
                     .build().unwrap());
                 arc

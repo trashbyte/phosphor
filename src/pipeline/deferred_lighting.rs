@@ -4,9 +4,9 @@ use vulkano::buffer::BufferUsage;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, AutoCommandBuffer, DynamicState};
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::device::Queue;
-use vulkano::format::ClearValue;
+use vulkano::format::{ClearValue, R16G16B16A16Sfloat, R8G8B8A8Srgb};
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPass, RenderPassDesc, Subpass, RenderPassAbstract};
-use vulkano::image::SwapchainImage;
+use vulkano::image::{SwapchainImage, ImmutableImage};
 use vulkano::pipeline::viewport::Viewport;
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 use winit::Window;
@@ -17,6 +17,7 @@ use crate::renderer::RenderInfo;
 use crate::renderpass::DeferredLightingRenderPass;
 use crate::shader::deferred_lighting as DeferredLightingShaders;
 use crate::buffer::CpuAccessibleBufferXalloc;
+use vulkano::sampler::{Sampler, Filter, MipmapMode, SamplerAddressMode};
 
 
 pub struct DeferredLightingRenderPipeline {
@@ -24,6 +25,10 @@ pub struct DeferredLightingRenderPipeline {
     pub framebuffers: Option<Vec<Arc<dyn FramebufferAbstract + Send + Sync>>>,
     renderpass: Arc<RenderPass<DeferredLightingRenderPass>>,
     fullscreen_vertex_buffer: Arc<CpuAccessibleBufferXalloc<[VertexPosition]>>,
+    irr_cubemap: Arc<ImmutableImage<R16G16B16A16Sfloat>>,
+    rad_cubemap: Arc<ImmutableImage<R16G16B16A16Sfloat>>,
+    brdf_lookup: Arc<ImmutableImage<R8G8B8A8Srgb>>,
+    linear_sampler: Arc<Sampler>
 }
 
 
@@ -64,7 +69,13 @@ impl DeferredLightingRenderPipeline {
             voxel_lighting_pipeline,
             framebuffers: None,
             renderpass,
-            fullscreen_vertex_buffer
+            fullscreen_vertex_buffer,
+            irr_cubemap: info.tex_registry.get_hdr("grass_irr").unwrap(),
+            rad_cubemap: info.tex_registry.get_hdr("grass_rad").unwrap(),
+            brdf_lookup: info.tex_registry.get("BRDF_Lookup_Smith").unwrap(),
+            linear_sampler: Sampler::new(info.device.clone(), Filter::Linear, Filter::Linear, MipmapMode::Linear,
+                SamplerAddressMode::Repeat, SamplerAddressMode::Repeat, SamplerAddressMode::Repeat,
+                0.0, 4.0, 0.0, 4.0).unwrap()
         }
     }
 }
@@ -86,13 +97,16 @@ impl RenderPipelineAbstract for DeferredLightingRenderPipeline {
             .add_image(info.attachments.albedo.clone()).unwrap()
             .add_image(info.attachments.roughness.clone()).unwrap()
             .add_image(info.attachments.metallic.clone()).unwrap()
+            .add_sampled_image(self.irr_cubemap.clone(), self.linear_sampler.clone()).unwrap()
+            .add_sampled_image(self.rad_cubemap.clone(), self.linear_sampler.clone()).unwrap()
+            .add_sampled_image(self.brdf_lookup.clone(), self.linear_sampler.clone()).unwrap()
             .build().unwrap());
 
         let mut cb = AutoCommandBufferBuilder::primary_one_time_submit(info.device.clone(), info.queue_main.family())
             .unwrap()
             .begin_render_pass(
                 self.framebuffers.as_ref().unwrap()[info.image_num].clone(), false,
-                vec![ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, [0.0, 0.0, 0.0, 1.0].into()]).unwrap()
+                vec![ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, ClearValue::None, [0.0, 0.0, 0.0, 1.0].into(), [0.0, 0.0, 0.0, 1.0].into()]).unwrap()
             .draw(self.voxel_lighting_pipeline.clone(), &DynamicState {
                 line_width: None,
                 viewports: Some(vec![Viewport {
@@ -126,7 +140,8 @@ impl RenderPipelineAbstract for DeferredLightingRenderPipeline {
                     .add(info.attachments.albedo.clone()).unwrap()
                     .add(info.attachments.roughness.clone()).unwrap()
                     .add(info.attachments.metallic.clone()).unwrap()
-                    .add(info.attachments.hdr_color.clone()).unwrap()
+                    .add(info.attachments.hdr_diffuse.clone()).unwrap()
+                    .add(info.attachments.hdr_specular.clone()).unwrap()
                     .build().unwrap());
                 arc
             }).collect::<Vec<_>>());
