@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use vulkano::buffer::BufferUsage;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, AutoCommandBuffer, DynamicState};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, AutoCommandBuffer, DynamicState, BlitImageError};
 use vulkano::device::Queue;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPass, RenderPassDesc, Subpass, RenderPassAbstract};
@@ -18,6 +18,7 @@ use crate::pipeline::RenderPipelineAbstract;
 use crate::buffer::CpuAccessibleBufferXalloc;
 use winit::Window;
 use vulkano::sampler::{Sampler, Filter, SamplerAddressMode, MipmapMode};
+use vulkano::command_buffer::validity::CheckBlitImageError;
 
 
 pub struct PostProcessRenderPipeline {
@@ -126,12 +127,27 @@ impl RenderPipelineAbstract for PostProcessRenderPipeline {
                                 exposure_adjustment: info.tonemapping_info.exposure,
                                 vignette_opacity: info.tonemapping_info.vignette_opacity,
                             }).unwrap()
-            .end_render_pass().unwrap()
-            // render tex -> mips tex
-            .blit_image(info.attachments.luma_render.clone(), [0, 0, 0], [info.dimensions[0] as i32, info.dimensions[1] as i32, 1], 0, 0,
-                        info.attachments.luma_mips.clone(),   [0, 0, 0], [512, 512, 1], 0, 0, 1, Filter::Linear).unwrap()
+            .end_render_pass().unwrap();
+        cb = match cb.blit_image(info.attachments.luma_render.clone(), [0, 0, 0], [info.dimensions[0] as i32, info.dimensions[1] as i32, 1], 0, 0,
+                                 info.attachments.luma_mips.clone(),   [0, 0, 0], [512, 512, 1], 0, 0, 1, Filter::Linear) {
+            Ok(c) => c,
+            Err(e) => {
+                match e {
+                    BlitImageError::CheckBlitImageError(ce) => {
+                        match ce {
+                            CheckBlitImageError::SourceCoordinatesOutOfRange => {
+                                warn!(Renderer, "Failed to build post process command buffer (luma blit stage): CheckBlitImageError(SourceCoordinatesOutOfRange)");
+                                return (AutoCommandBufferBuilder::new(info.device.clone(), info.queue_main.family()).unwrap().build().unwrap(), info.queue_main.clone());
+                            },
+                            _ => { fatal!(Renderer, "{:?}", e); }
+                        }
+                    },
+                    _ => { fatal!(Renderer, "{:?}", e); }
+                }
+            }
+        };
 
-            .copy_image_to_buffer_dimensions(info.attachments.luma_mips.clone(), info.histogram_compute.lock().source_buffer.clone(), [0, 0, 0], [512, 512, 1], 0, 1, 0).unwrap();
+        cb = cb.copy_image_to_buffer_dimensions(info.attachments.luma_mips.clone(), info.histogram_compute.lock().source_buffer.clone(), [0, 0, 0], [512, 512, 1], 0, 1, 0).unwrap();
         (cb.build().unwrap(), info.queue_main.clone())
     }
 
