@@ -22,3 +22,9 @@ Phosphor is a general-purpose deferred RPB renderer, written in pure rust. Curre
 * Parametric lights
 * Scene reflection captures
 * IES profiles
+
+## Usage:
+
+Don't. Check back in a month or so.
+
+If you're feeling *really* adventurous, check out [Gestalt](https://github.com/NotGyro/Gestalt) for an example of a project using phosphor.
