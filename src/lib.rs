@@ -2,23 +2,8 @@
 
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate vulkano;
-#[macro_use] extern crate lumberjack;
+#[macro_use] extern crate hemlock;
 extern crate imgui;
-
-extern crate cgmath;
-extern crate fnv;
-extern crate half;
-extern crate hashbrown;
-extern crate image;
-extern crate noise;
-extern crate parking_lot;
-extern crate make_names;
-extern crate rand;
-extern crate rusttype;
-extern crate vulkano_shaders;
-extern crate winit;
-extern crate xalloc;
-extern crate tobj;
 
 // modules
 
@@ -29,24 +14,22 @@ pub mod cpu_pool;
 pub mod geometry;
 pub mod memory;
 #[macro_use] mod names;
-pub mod pipeline;
-pub mod registry;
+// pub mod pipeline;
 pub mod renderer;
 pub mod renderpass;
 pub mod shader;
 pub mod vulkano_win;
+pub mod stage;
+pub mod material;
 
 
 #[allow(non_upper_case_globals)]
-pub mod lumberjack_scopes {
-    use lumberjack::prelude::*;
-    use lumberjack::Verbosity::*;
+pub mod hemlock_scopes {
+    use hemlock::prelude::*;
+    use hemlock::Verbosity::*;
 
     lazy_static! {
-        pub static ref Test:     u32 = lumberjack::register_scope(Scope::new("Test").log(Verbose).print(Warning));
-        pub static ref Game:     u32 = lumberjack::register_scope(Scope::new("Game"));
-        pub static ref Network:  u32 = lumberjack::register_scope(Scope::new("Network"));
-        pub static ref Renderer: u32 = lumberjack::register_scope(Scope::new("Renderer"));
-        pub static ref Mesher:   u32 = lumberjack::register_scope(Scope::new("Mesher"));
+        pub static ref Test:     u32 = hemlock::register_scope(Scope::new("Test").log(Verbose).print(Warning));
+        pub static ref Renderer: u32 = hemlock::register_scope(Scope::new("Renderer"));
     }
 }

@@ -5,19 +5,17 @@
 
 use std::sync::Arc;
 
-use crate::geometry::{VertexGroup, Material, DeferredShadingVertex};
-use crate::renderer::MeshRenderQueueEntry;
-use toolbox::Transform;
+use crate::geometry::{VertexGroup, MeshVertex};
+use toolbelt::Transform;
 
 
 /// A mesh object, made up of a set of vertex groups, a list of associated materials, and a transform.
 ///
 /// See [module-level documentation](self).
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Mesh {
     pub transform: Transform,
-    pub vertex_groups: Vec<Arc<VertexGroup<DeferredShadingVertex>>>,
-    pub materials: Vec<Material>
+    pub vertex_groups: Vec<Arc<VertexGroup<MeshVertex>>>,
 }
 
 
@@ -27,24 +25,6 @@ impl Mesh {
         Mesh {
             transform: Transform::identity(),
             vertex_groups: Vec::new(),
-            materials: Vec::new(),
         }
-    }
-
-
-    /// Returns a render queue object with the information necessary to render the mesh.
-    ///
-    /// Stored in [Renderer.chunk_mesh_queue](::renderer::Renderer::render_queue) and used in
-    /// [ChunkRenderPipeline](::pipeline::chunk_pipeline::ChunkRenderPipeline).
-    pub fn queue(&self) -> Vec<MeshRenderQueueEntry> {
-        let mut result = Vec::new();
-        for vg in self.vertex_groups.iter() {
-            result.push(MeshRenderQueueEntry {
-                vertex_group: vg.clone(),
-                material: self.materials[vg.material_id as usize].clone(),
-                transform: self.transform.to_matrix()
-            });
-        }
-        result
     }
 }

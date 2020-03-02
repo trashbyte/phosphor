@@ -1,8 +1,13 @@
 [package]
 name = "phosphor"
+description = "a deferred PBR renderer for vulkan"
 version = "0.0.1"
-authors = ["trashbyte"]
+authors = ["trashbyte <github@trashbyte.io>"]
 edition = "2018"
+license = "MIT"
+repository = "https://github.com/trashbyte/phosphor"
+keywords = ["renderer", "pbr", "vulkan"]
+categories = ["game-development", "graphics", "rendering::engine"]
 
 [dependencies]
 cgmath = { version = "0.17.0", features = [ "swizzle" ] }
@@ -24,14 +29,14 @@ half = "1.4.0"
 tobj = "0.1.11"
 
 # custom version with docking
-imgui = { path = "../imgui-rs" }
+#imgui = { path = "../imgui-rs" }
 # stable version
-#imgui = "0.2.1"
+imgui = "0.2.1"
 
-vulkano-shaders = { version = "0.16.0", path = "../vulkano-shaders" }
-lumberjack = { path = "../lumberjack" }
-toolbox = { path = "../toolbox" }
-make_names = { path = "../make_names" }
+vulkano-shaders = "0.16.0"
+hemlock = "0.0.2"
+toolbelt = "0.0.2"
+nametag = "0.0.1"
 
 [build-dependencies]
 rerun_except = "0.1.0"

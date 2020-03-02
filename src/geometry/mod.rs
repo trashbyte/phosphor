@@ -9,25 +9,12 @@ pub mod vertex;
 pub mod vertexgroup;
 
 pub use self::mesh::Mesh;
-pub use self::vertex::{VertexPositionColorAlpha, VertexPosition, DeferredShadingVertex, VertexPositionObjectId, VertexPositionUV};
+pub use self::vertex::{VertexPositionColorAlpha, VertexPosition, MeshVertex, VertexPositionObjectId, VertexPositionUV};
 pub use self::vertexgroup::VertexGroup;
-
-
-/// Shader parameters for a given material.
-#[derive(Clone, Debug)]
-pub struct Material {
-    /// Name of albedo map, used to look up texture in the [TextureRegistry](::registry::TextureRegistry).
-    pub albedo_map_name: String,
-    /// Exponent used in specular lighting calculation. Higher values have sharper highlights.
-    pub specular_exponent: f32,
-    /// Intensity of specular highlights.
-    pub specular_strength: f32
-}
 
 
 pub mod cube {
     use crate::geometry::VertexPositionColorAlpha;
-
 
     // TODO: chnage to generic "draw box"
     pub fn generate_chunk_debug_line_vertices(x: i32, y: i32, z: i32, size: f32, alpha: f32) -> [VertexPositionColorAlpha; 8] {

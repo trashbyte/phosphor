@@ -1,5 +1,7 @@
 //! Shaders. Macro-generated with `vulkano-shaders`.
 
+pub mod runtime;
+
 /// Shader for rendering line sets.
 pub mod lines {
     pub mod vertex {
@@ -48,8 +50,8 @@ pub mod text {
     }
 }
 
-/// Deferred pipeline shading shaders
-pub mod deferred_shading {
+/// Deferred mesh shading
+pub mod mesh_generic {
     pub mod vertex {
         vulkano_shaders::shader!{
             ty: "vertex",
@@ -92,6 +94,22 @@ pub mod tonemapper {
         vulkano_shaders::shader!{
             ty: "fragment",
             path: "src/shader/tonemapper.frag"
+        }
+    }
+}
+
+/// Scene color resolve
+pub mod resolve_scene_color {
+    pub mod vertex {
+        vulkano_shaders::shader!{
+            ty: "vertex",
+            path: "src/shader/resolve.vert"
+        }
+    }
+    pub mod fragment {
+        vulkano_shaders::shader!{
+            ty: "fragment",
+            path: "src/shader/resolve.frag"
         }
     }
 }

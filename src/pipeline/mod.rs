@@ -7,12 +7,12 @@ pub mod lines;
 pub mod text;
 pub mod postprocess;
 pub mod imgui;
-pub use self::occlusion::OcclusionRenderPipeline;
-pub use self::deferred_shading::DeferredShadingRenderPipeline;
-pub use self::deferred_lighting::DeferredLightingRenderPipeline;
-pub use self::lines::LinesRenderPipeline;
-pub use self::text::TextRenderPipeline;
-pub use self::postprocess::PostProcessRenderPipeline;
+//pub use self::occlusion::OcclusionRenderPipeline;
+//pub use self::deferred_shading::DeferredShadingRenderPipeline;
+//pub use self::deferred_lighting::DeferredLightingRenderPipeline;
+//pub use self::lines::LinesRenderPipeline;
+//pub use self::text::TextRenderPipeline;
+//pub use self::postprocess::PostProcessRenderPipeline;
 
 
 use std::sync::Arc;

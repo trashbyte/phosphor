@@ -140,7 +140,7 @@ impl TextRenderPipeline {
 
         let mut fonts = HashMap::new();
         fonts.insert("Roboto Regular".into(), FontData {
-            font: Box::new(Font::from_bytes(include_bytes!("../../../fonts/Roboto-Regular.ttf") as & [u8]).unwrap()),
+            font: Box::new(Font::from_bytes(include_bytes!("../../../assets/fonts/Roboto-Regular.ttf") as & [u8]).unwrap()),
             cache: Box::new(Cache::builder().dimensions(CACHE_SIZE as u32, CACHE_SIZE as u32).build()),
             cache_buffer: CpuAccessibleBufferXalloc::from_iter(info.device.clone(),
                                                                BufferUsage::all(),
@@ -154,7 +154,7 @@ impl TextRenderPipeline {
         });
 
         fonts.insert("Fira Mono".into(), FontData {
-            font: Box::new(Font::from_bytes(include_bytes!("../../../fonts/FiraMono-Regular.ttf") as & [u8]).unwrap()),
+            font: Box::new(Font::from_bytes(include_bytes!("../../../assets/fonts/FiraMono-Regular.ttf") as & [u8]).unwrap()),
             cache: Box::new(Cache::builder().dimensions(CACHE_SIZE as u32, CACHE_SIZE as u32).build()),
             cache_buffer: CpuAccessibleBufferXalloc::from_iter(info.device.clone(),
                                                                BufferUsage::all(),

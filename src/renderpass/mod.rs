@@ -1,7 +1,7 @@
 //! Custom RenderPass types.
 
-pub mod deferred_shading;
-pub use self::deferred_shading::DeferredShadingRenderPass;
+pub mod mesh_shading;
+pub use self::mesh_shading::GenericMeshShadingRenderPass;
 
 pub mod deferred_lighting;
 pub use self::deferred_lighting::DeferredLightingRenderPass;
@@ -12,5 +12,5 @@ pub use self::lines::LinesRenderPass;
 pub mod occlusion;
 pub use self::occlusion::OcclusionRenderPass;
 
-pub mod postprocess;
-pub use self::postprocess::PostProcessRenderPass;
+pub mod resolve_scene_color;
+pub use self::resolve_scene_color::ResolveSceneColorRenderPass;

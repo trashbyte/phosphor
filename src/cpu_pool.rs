@@ -171,9 +171,7 @@ impl<T> XallocCpuBufferPool<T> {
     pub fn indirect_buffer(device: Arc<Device>) -> XallocCpuBufferPool<T> {
         XallocCpuBufferPool::new(device, BufferUsage::indirect_buffer())
     }
-}
 
-impl<T> XallocCpuBufferPool<T> {
     /// Returns the current capacity of the pool, in number of elements.
     pub fn capacity(&self) -> usize {
         match *self.current_buffer.lock().unwrap() {
@@ -454,7 +452,7 @@ impl<T> XallocCpuBufferPool<T> {
         Ok(XallocCpuBufferPoolChunk {
                // TODO: remove .clone() once non-lexical borrows land
                buffer: current_buffer.clone(),
-               index: index,
+               index,
                align_offset,
                requested_len,
                marker: PhantomData,

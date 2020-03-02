@@ -22,13 +22,13 @@ impl_vertex!(VertexPositionUV, position, uv);
 ///
 /// Used in DeferredRenderPipeline
 #[derive(Debug, Clone, Default)]
-pub struct DeferredShadingVertex {
+pub struct MeshVertex {
     pub position:  [f32; 3],
     pub normal:    [f32; 3],
     pub tangent:   [f32; 3],
     pub uv:        [f32; 2]
 }
-impl_vertex!(DeferredShadingVertex, position, normal, tangent, uv);
+impl_vertex!(MeshVertex, position, normal, tangent, uv);
 
 
 /// A vertex type with position and color + alpha data.
