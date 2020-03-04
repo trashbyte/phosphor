@@ -3,11 +3,11 @@
 #[macro_export] macro_rules! name { ($i:ident) => {crate::names::$i} }
 
 nametag::setup_names! {
-    Metallic,
+    Position,
+    Roughness,
     MainDepth,
     Albedo,
-    Position,
     Normal,
-    Roughness,
+    Metallic,
     
 }

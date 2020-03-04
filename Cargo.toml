@@ -29,14 +29,14 @@ half = "1.4.0"
 tobj = "0.1.11"
 
 # custom version with docking
-#imgui = { path = "../imgui-rs" }
+imgui = { path = "../imgui-rs" }
 # stable version
-imgui = "0.2.1"
+#imgui = "0.2.1"
 
 vulkano-shaders = "0.16.0"
-hemlock = "0.0.2"
-toolbelt = "0.0.2"
-nametag = "0.0.1"
+hemlock = { path = "../hemlock" }
+toolbelt = { path = "../toolbelt" }
+nametag = { path = "../nametag" }
 
 [build-dependencies]
 rerun_except = "0.1.0"
